@@ -1,0 +1,8 @@
+projects:
+  - name: example-project
+    dir: examples/terraform
+    autoplan:
+      when_modified: ["*.tf", ".terraform.lock.hcl"]
+      enabled: true
+    plan_requirements: [mergeable]
+    apply_requirements: [mergeable, approved]

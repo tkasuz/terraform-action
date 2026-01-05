@@ -1,0 +1,28 @@
+name: 'Terraform PR Action'
+description: 'Run Terraform plan/apply based on PR comments, similar to Atlantis, using tfcmt and go-github'
+author: 'Terraform Action Contributors'
+
+branding:
+  icon: 'cloud'
+  color: 'purple'
+
+inputs:
+  config-path:
+    description: 'Path to terraform-action.yaml configuration file'
+    required: false
+    default: 'terraform-action.yaml'
+  working-directory:
+    description: 'Working directory (defaults to workspace root)'
+    required: false
+    default: '.'
+
+outputs:
+  status:
+    description: 'Status of the Terraform operation (success, failure, skipped)'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  env:
+    TERRAFORM_ACTION_CONFIG_PATH: ${{ inputs.config-path }}
+    GITHUB_WORKSPACE: ${{ inputs.working-directory }}
