@@ -59,7 +59,6 @@ jobs:
         if: github.event_name != 'pull_request'
         env:
           KO_DOCKER_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          GOFLAGS: "-ldflags=-s -w"
         run: |
           TAGS="${{ steps.meta.outputs.tags }}"
           IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
