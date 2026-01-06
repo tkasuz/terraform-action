@@ -1,20 +1,15 @@
-name: Build and Publish to GitHub Container Registry
+name: Build and Publish Release Assets
 
 on:
   release:
     types: [published]
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
-  build-and-push:
+  build-and-publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write
+      contents: write
 
     steps:
       - name: Checkout code
@@ -27,62 +22,23 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+      - name: Build release binaries
+        if: github.event_name == 'release'
+        run: |
+          # Build for multiple platforms
+          GOOS=linux GOARCH=amd64 go build -o terraform-action-linux-amd64 -ldflags="-s -w" ./cmd/terraform-action
+          GOOS=linux GOARCH=arm64 go build -o terraform-action-linux-arm64 -ldflags="-s -w" ./cmd/terraform-action
+          GOOS=darwin GOARCH=amd64 go build -o terraform-action-darwin-amd64 -ldflags="-s -w" ./cmd/terraform-action
+          GOOS=darwin GOARCH=arm64 go build -o terraform-action-darwin-arm64 -ldflags="-s -w" ./cmd/terraform-action
+          GOOS=windows GOARCH=amd64 go build -o terraform-action-windows-amd64.exe -ldflags="-s -w" ./cmd/terraform-action
+
+      - name: Upload release binaries
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup ko
-        uses: ko-build/setup-ko@v0.6
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION=${{ github.event.release.tag_name }}
-            # Remove 'v' prefix if present
-            VERSION_NO_V=${VERSION#v}
-            echo "tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION_NO_V},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          elif [[ $GITHUB_REF == refs/heads/develop ]]; then
-            echo "tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop" >> $GITHUB_OUTPUT
-            echo "version=develop" >> $GITHUB_OUTPUT
-          else
-            echo "tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:pr-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-            echo "version=pr-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Build and push with ko
-        if: github.event_name != 'pull_request'
-        env:
-          KO_DOCKER_REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        run: |
-          TAGS="${{ steps.meta.outputs.tags }}"
-          IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
-
-          # Build with ko for each platform and tag
-          for tag in "${TAG_ARRAY[@]}"; do
-            TAG_NAME=${tag##*:}
-            echo "Building and pushing $tag for multiple platforms..."
-            ko build ./cmd/terraform-action --bare --tags=$TAG_NAME --platform=linux/amd64,linux/arm64
-          done
-
-          echo "✅ Built and pushed images with tags:"
-          echo "$TAGS" | tr ',' '\n'
-
-      - name: Build with ko (PR - no push)
-        if: github.event_name == 'pull_request'
-        env:
-          KO_DOCKER_REPO: ko.local
-        run: |
-          echo "Building image for PR validation (not pushing)..."
-          ko build ./cmd/terraform-action --bare --platform=linux/amd64
-
-      - name: Output image information
-        if: github.event_name != 'pull_request'
-        run: |
-          echo "Image published to:"
-          echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n'
+          files: |
+            terraform-action-linux-amd64
+            terraform-action-linux-arm64
+            terraform-action-darwin-amd64
+            terraform-action-darwin-arm64
+            terraform-action-windows-amd64.exe

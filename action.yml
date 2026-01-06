@@ -16,13 +16,27 @@ inputs:
     required: false
     default: '.'
 
-outputs:
-  status:
-    description: 'Status of the Terraform operation (success, failure, skipped)'
-
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
-  env:
-    TERRAFORM_ACTION_CONFIG_PATH: ${{ inputs.config-path }}
-    GITHUB_WORKSPACE: ${{ inputs.working-directory }}
+  using: 'composite'
+  steps:
+    - name: Download terraform-action binary
+      run: |
+        VERSION="${{ github.action_ref }}"
+        # If no version specified, use latest
+        if [ -z "$VERSION" ] || [ "$VERSION" = "main" ]; then
+          DOWNLOAD_URL="https://github.com/${{ github.action_repository }}/releases/latest/download/terraform-action-linux-amd64"
+        else
+          DOWNLOAD_URL="https://github.com/${{ github.action_repository }}/releases/download/${VERSION}/terraform-action-linux-amd64"
+        fi
+
+        echo "Downloading terraform-action from $DOWNLOAD_URL"
+        curl -sL "$DOWNLOAD_URL" -o ${{ runner.temp }}/terraform-action
+        chmod +x ${{ runner.temp }}/terraform-action
+      shell: bash
+
+    - name: Run terraform-action
+      run: ${{ runner.temp }}/terraform-action
+      shell: bash
+      env:
+        TERRAFORM_ACTION_CONFIG_PATH: ${{ inputs.config-path }}
+        GITHUB_WORKSPACE: ${{ inputs.working-directory }}

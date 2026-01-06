@@ -1,4 +1,4 @@
-.PHONY: build test clean install docker-build ko-build ko-publish docker-run fmt lint run-local
+.PHONY: build test clean install docker-build docker-run fmt lint run-local build-all
 
 # Build the binary
 build:
@@ -22,18 +22,13 @@ install:
 docker-build:
 	docker build -t terraform-action:latest .
 
-# Build Docker image with ko (requires ko to be installed)
-ko-build:
-	KO_DOCKER_REPO=ko.local ko build ./cmd/terraform-action --bare
-
-# Build and push to GitHub Container Registry with ko (requires KO_DOCKER_REPO to be set)
-ko-publish:
-	@if [ -z "$(KO_DOCKER_REPO)" ]; then \
-		echo "Error: KO_DOCKER_REPO is not set"; \
-		echo "Example: make ko-publish KO_DOCKER_REPO=ghcr.io/username/terraform-action"; \
-		exit 1; \
-	fi
-	ko build ./cmd/terraform-action --bare --platform=linux/amd64,linux/arm64
+# Build binaries for all platforms
+build-all:
+	GOOS=linux GOARCH=amd64 go build -o dist/terraform-action-linux-amd64 -ldflags="-s -w" ./cmd/terraform-action
+	GOOS=linux GOARCH=arm64 go build -o dist/terraform-action-linux-arm64 -ldflags="-s -w" ./cmd/terraform-action
+	GOOS=darwin GOARCH=amd64 go build -o dist/terraform-action-darwin-amd64 -ldflags="-s -w" ./cmd/terraform-action
+	GOOS=darwin GOARCH=arm64 go build -o dist/terraform-action-darwin-arm64 -ldflags="-s -w" ./cmd/terraform-action
+	GOOS=windows GOARCH=amd64 go build -o dist/terraform-action-windows-amd64.exe -ldflags="-s -w" ./cmd/terraform-action
 
 # Run Docker container
 docker-run:
