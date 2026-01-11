@@ -37378,8 +37378,11 @@ async function run() {
             args = parsedComment.args;
         }
         // Get PR information
-        const prNumber = (0, pr_validation_1.getPRNumberFromContext)(github.context);
-        const pr = await (0, pr_validation_1.getPullRequestInfo)(token, github.context.repo.owner, github.context.repo.repo, prNumber);
+        let pr = null;
+        if (command === 'apply') {
+            const prNumber = (0, pr_validation_1.getPRNumberFromContext)(github.context);
+            pr = await (0, pr_validation_1.getPullRequestInfo)(token, github.context.repo.owner, github.context.repo.repo, prNumber);
+        }
         // Setup tfcmt
         const tfcmtPath = await (0, tfcmt_1.setupTfcmt)();
         // Execute terraform for each target project serially
@@ -37415,8 +37418,10 @@ async function executeProjectCommand(project, command, args, pr, tfcmtPath, tfcm
         : project.apply_requirements ?? (0, config_1.getDefaultRequirements)('apply');
     core.info(`Requirements: ${requirements.join(', ')}`);
     // Validate requirements
-    (0, pr_validation_1.validateRequirements)(pr, requirements);
-    core.info('All requirements met');
+    if (command === 'apply' && pr != null) {
+        (0, pr_validation_1.validateRequirements)(pr, requirements);
+        core.info('All requirements met');
+    }
     // Resolve working directory
     const workingDir = path.resolve(project.dir);
     // Execute terraform with tfcmt

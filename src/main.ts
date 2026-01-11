@@ -16,7 +16,7 @@ import {
   getPRNumberFromContext,
   getCommentBodyFromContext,
 } from './pr-validation';
-import { ProjectConfig, TerraformCommand } from './types';
+import { ProjectConfig, PullRequestInfo, TerraformCommand } from './types';
 
 /**
  * Main action execution
@@ -69,13 +69,16 @@ async function run(): Promise<void> {
 
 
     // Get PR information
-    const prNumber = getPRNumberFromContext(github.context);
-    const pr = await getPullRequestInfo(
-      token,
-      github.context.repo.owner,
-      github.context.repo.repo,
-      prNumber
-    );
+    let pr: PullRequestInfo | null = null
+    if (command === 'apply') {
+      const prNumber = getPRNumberFromContext(github.context);
+      pr = await getPullRequestInfo(
+        token,
+        github.context.repo.owner,
+        github.context.repo.repo,
+        prNumber
+      );
+    }
 
     // Setup tfcmt
     const tfcmtPath = await setupTfcmt();
@@ -114,7 +117,7 @@ async function executeProjectCommand(
   project: ProjectConfig,
   command: 'plan' | 'apply',
   args: string[],
-  pr: ReturnType<typeof getPullRequestInfo> extends Promise<infer T> ? T : never,
+  pr: PullRequestInfo | null, 
   tfcmtPath: string,
   tfcmtConfig?: { enabled: boolean; skip_no_changes?: boolean; ignore_warning?: boolean }
 ): Promise<void> {
@@ -132,8 +135,10 @@ async function executeProjectCommand(
   core.info(`Requirements: ${requirements.join(', ')}`);
 
   // Validate requirements
-  validateRequirements(pr, requirements);
-  core.info('All requirements met');
+  if (command === 'apply' && pr != null) {
+    validateRequirements(pr, requirements);
+    core.info('All requirements met');
+  }
 
   // Resolve working directory
   const workingDir = path.resolve(project.dir);
