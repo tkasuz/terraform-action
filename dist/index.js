@@ -37350,35 +37350,41 @@ async function run() {
         const token = core.getInput('github-token', { required: true });
         const configPath = core.getInput('config-path') || '.terraform-action.yaml';
         core.info('Starting Terraform PR Comment Action');
-        // Extract comment body
-        const commentBody = (0, pr_validation_1.getCommentBodyFromContext)(github.context);
-        core.info(`Processing comment: ${commentBody}`);
-        // Parse comment
-        const parsedComment = (0, comment_parser_1.parseComment)(commentBody);
-        if (!parsedComment) {
-            core.info('Comment does not contain a terraform command, skipping');
-            return;
-        }
-        core.info(`Detected command: terraform ${parsedComment.command}`);
+        // Validate Terraform installation
+        await (0, terraform_1.validateTerraformInstalled)();
         // Load configuration
         const config = (0, config_1.loadConfig)(configPath);
         core.info(`Loaded configuration with ${config.projects.length} project(s)`);
+        let targetProjectNames = config.projects.map((p) => p.name);
+        let command = 'plan';
+        let args = [];
+        // Extract comment body
+        if (github.context.eventName === 'issue_comment') {
+            const commentBody = (0, pr_validation_1.getCommentBodyFromContext)(github.context);
+            core.info(`Processing comment: ${commentBody}`);
+            // Parse comment
+            const parsedComment = (0, comment_parser_1.parseComment)(commentBody);
+            if (!parsedComment) {
+                core.info('Comment does not contain a terraform command, skipping');
+                return;
+            }
+            core.info(`Detected command: terraform ${parsedComment.command}`);
+            if (parsedComment.projects.length > 0) {
+                (0, comment_parser_1.validateProjectNames)(parsedComment.projects, targetProjectNames);
+                targetProjectNames = parsedComment.projects;
+                core.info(`Target projects: ${targetProjectNames.join(', ')}`);
+            }
+            command = parsedComment.command;
+            args = parsedComment.args;
+        }
         // Get PR information
         const prNumber = (0, pr_validation_1.getPRNumberFromContext)(github.context);
         const pr = await (0, pr_validation_1.getPullRequestInfo)(token, github.context.repo.owner, github.context.repo.repo, prNumber);
-        // Security check: block apply on forked PRs
-        (0, pr_validation_1.blockForkForApply)(pr, parsedComment.command);
-        // Determine target projects
-        const allProjectNames = config.projects.map((p) => p.name);
-        const targetProjectNames = (0, comment_parser_1.getTargetProjects)(parsedComment, allProjectNames);
-        core.info(`Target projects: ${targetProjectNames.join(', ')}`);
-        // Validate Terraform installation
-        await (0, terraform_1.validateTerraformInstalled)();
         // Setup tfcmt
         const tfcmtPath = await (0, tfcmt_1.setupTfcmt)();
         // Execute terraform for each target project serially
         for (const projectName of targetProjectNames) {
-            await executeProjectCommand(config.projects.find((p) => p.name === projectName), parsedComment.command, parsedComment.args, pr, tfcmtPath, config.tfcmt);
+            await executeProjectCommand(config.projects.find((p) => p.name === projectName), command, args, pr, tfcmtPath, config.tfcmt);
         }
         core.info('Terraform PR Comment Action completed successfully');
     }
@@ -37478,7 +37484,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getPullRequestInfo = getPullRequestInfo;
 exports.validateRequirements = validateRequirements;
-exports.blockForkForApply = blockForkForApply;
 exports.validateEventType = validateEventType;
 exports.getPRNumberFromContext = getPRNumberFromContext;
 exports.getCommentBodyFromContext = getCommentBodyFromContext;
@@ -37562,32 +37567,14 @@ function validateRequirements(pr, requirements) {
     }
 }
 /**
- * Blocks execution on forked PRs for apply commands
- *
- * @param pr - Pull request information
- * @param command - Terraform command being executed
- * @throws Error if attempting to apply on a forked PR
- *
- * @remarks
- * This is a critical security measure to prevent malicious code execution
- * from forked repositories, which could leak secrets or compromise the workflow.
- */
-function blockForkForApply(pr, command) {
-    if (command === 'apply' && pr.isFork) {
-        throw new Error('Terraform apply is blocked on forked PRs for security reasons. ' +
-            'Pull requests from forks cannot execute apply commands to prevent ' +
-            'unauthorized access to secrets and infrastructure.');
-    }
-}
-/**
  * Validates that the event is an issue_comment event
  *
  * @param eventName - GitHub event name
  * @throws Error if event is not issue_comment
  */
 function validateEventType(eventName) {
-    if (eventName !== 'issue_comment') {
-        throw new Error(`This action is designed for issue_comment events, but was triggered by: ${eventName}`);
+    if (eventName !== 'issue_comment' && eventName !== 'pull_request') {
+        throw new Error(`This action is designed for issue_comment or pull_request events, but was triggered by: ${eventName}`);
     }
 }
 /**
