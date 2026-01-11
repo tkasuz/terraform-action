@@ -1,6 +1,6 @@
 name: 'Terraform PR Action'
 description: 'Run Terraform plan/apply based on PR comments, similar to Atlantis, using tfcmt'
-author: 'Terraform Action Contributors'
+author: 'tkasuz'
 
 branding:
   icon: 'cloud'
@@ -17,4 +17,4 @@ inputs:
 
 runs:
   using: 'node20'
-  main: 'dist/main.js'
+  main: 'dist/index.js'
