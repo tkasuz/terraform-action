@@ -37348,6 +37348,7 @@ async function run() {
         (0, pr_validation_1.validateEventType)(github.context.eventName);
         // Get inputs
         const token = core.getInput('github-token', { required: true });
+        process.env.GITHUB_TOKEN = token;
         const configPath = core.getInput('config-path') || '.terraform-action.yaml';
         core.info('Starting Terraform PR Comment Action');
         // Validate Terraform installation

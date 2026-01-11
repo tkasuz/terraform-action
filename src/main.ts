@@ -28,6 +28,7 @@ async function run(): Promise<void> {
 
     // Get inputs
     const token = core.getInput('github-token', { required: true });
+    process.env.GITHUB_TOKEN = token;
     const configPath = core.getInput('config-path') || '.terraform-action.yaml';
 
     core.info('Starting Terraform PR Comment Action');
