@@ -6,7 +6,7 @@ projects:
       when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl"]
     plan_requirements: []
     apply_requirements: []
-  - name: production
+  - name: development
     dir: examples/terraform/dev
     autoplan:
       enabled: true

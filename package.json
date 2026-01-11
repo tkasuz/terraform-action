@@ -22,7 +22,7 @@
     "automation"
   ],
   "author": "Terraform Action Contributors",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@actions/core": "^2.0.2",
     "@actions/exec": "^2.0.0",
