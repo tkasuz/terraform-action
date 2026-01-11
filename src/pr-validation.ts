@@ -4,7 +4,7 @@
 
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import { PullRequestInfo, Requirement, TerraformCommand } from './types';
+import { PullRequestInfo, Requirement } from './types';
 
 /**
  * Fetches pull request information from GitHub API
@@ -113,39 +113,15 @@ export function validateRequirements(
 }
 
 /**
- * Blocks execution on forked PRs for apply commands
- *
- * @param pr - Pull request information
- * @param command - Terraform command being executed
- * @throws Error if attempting to apply on a forked PR
- *
- * @remarks
- * This is a critical security measure to prevent malicious code execution
- * from forked repositories, which could leak secrets or compromise the workflow.
- */
-export function blockForkForApply(
-  pr: PullRequestInfo,
-  command: TerraformCommand
-): void {
-  if (command === 'apply' && pr.isFork) {
-    throw new Error(
-      'Terraform apply is blocked on forked PRs for security reasons. ' +
-      'Pull requests from forks cannot execute apply commands to prevent ' +
-      'unauthorized access to secrets and infrastructure.'
-    );
-  }
-}
-
-/**
  * Validates that the event is an issue_comment event
  *
  * @param eventName - GitHub event name
  * @throws Error if event is not issue_comment
  */
 export function validateEventType(eventName: string): void {
-  if (eventName !== 'issue_comment') {
+  if (eventName !== 'issue_comment' && eventName !== 'pull_request') {
     throw new Error(
-      `This action is designed for issue_comment events, but was triggered by: ${eventName}`
+      `This action is designed for issue_comment or pull_request events, but was triggered by: ${eventName}`
     );
   }
 }

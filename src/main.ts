@@ -6,18 +6,17 @@ import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as path from 'path';
 import { loadConfig, getDefaultRequirements } from './config';
-import { parseComment, getTargetProjects } from './comment-parser';
+import { parseComment, validateProjectNames } from './comment-parser';
 import { setupTfcmt } from './tfcmt';
 import { executeTerraformWithTfcmt, validateTerraformInstalled } from './terraform';
 import {
   getPullRequestInfo,
   validateRequirements,
-  blockForkForApply,
   validateEventType,
   getPRNumberFromContext,
   getCommentBodyFromContext,
 } from './pr-validation';
-import { ProjectConfig } from './types';
+import { ProjectConfig, TerraformCommand } from './types';
 
 /**
  * Main action execution
@@ -33,22 +32,41 @@ async function run(): Promise<void> {
 
     core.info('Starting Terraform PR Comment Action');
 
-    // Extract comment body
-    const commentBody = getCommentBodyFromContext(github.context);
-    core.info(`Processing comment: ${commentBody}`);
-
-    // Parse comment
-    const parsedComment = parseComment(commentBody);
-    if (!parsedComment) {
-      core.info('Comment does not contain a terraform command, skipping');
-      return;
-    }
-
-    core.info(`Detected command: terraform ${parsedComment.command}`);
+    // Validate Terraform installation
+    await validateTerraformInstalled();
 
     // Load configuration
     const config = loadConfig(configPath);
     core.info(`Loaded configuration with ${config.projects.length} project(s)`);
+
+    let targetProjectNames: string[] = config.projects.map((p) => p.name); 
+    let command: TerraformCommand = 'plan'
+    let args: string[] = []
+
+    // Extract comment body
+    if (github.context.eventName === 'issue_comment') {
+      const commentBody = getCommentBodyFromContext(github.context);
+      core.info(`Processing comment: ${commentBody}`);
+
+      // Parse comment
+      const parsedComment = parseComment(commentBody);
+      if (!parsedComment) {
+        core.info('Comment does not contain a terraform command, skipping');
+        return;
+      }
+
+      core.info(`Detected command: terraform ${parsedComment.command}`);
+
+      if (parsedComment.projects.length > 0) {
+        validateProjectNames(parsedComment.projects, targetProjectNames);
+        targetProjectNames = parsedComment.projects
+
+        core.info(`Target projects: ${targetProjectNames.join(', ')}`);
+      }
+      command = parsedComment.command
+      args = parsedComment.args
+    }
+
 
     // Get PR information
     const prNumber = getPRNumberFromContext(github.context);
@@ -59,18 +77,6 @@ async function run(): Promise<void> {
       prNumber
     );
 
-    // Security check: block apply on forked PRs
-    blockForkForApply(pr, parsedComment.command);
-
-    // Determine target projects
-    const allProjectNames = config.projects.map((p) => p.name);
-    const targetProjectNames = getTargetProjects(parsedComment, allProjectNames);
-
-    core.info(`Target projects: ${targetProjectNames.join(', ')}`);
-
-    // Validate Terraform installation
-    await validateTerraformInstalled();
-
     // Setup tfcmt
     const tfcmtPath = await setupTfcmt();
 
@@ -78,8 +84,8 @@ async function run(): Promise<void> {
     for (const projectName of targetProjectNames) {
       await executeProjectCommand(
         config.projects.find((p) => p.name === projectName)!,
-        parsedComment.command,
-        parsedComment.args,
+        command,
+        args,
         pr,
         tfcmtPath,
         config.tfcmt

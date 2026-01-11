@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { Config, ProjectConfig, Requirement } from './types';
+import type { Config, ProjectConfig, Requirement } from './types';
 
 /**
  * Validates that requirements are valid
