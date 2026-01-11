@@ -1,308 +1,264 @@
-# Terraform GitHub Action
+# Terraform PR Comment Action
 
-A GitHub Action that runs Terraform commands from PR comments, similar to Atlantis, using [tfcmt](https://github.com/suzuki-shunsuke/tfcmt) for formatted output and [go-github](https://github.com/google/go-github) for GitHub API interactions.
+A production-ready GitHub Action for running Terraform plan/apply commands via PR comments, similar to Atlantis. Built with TypeScript and integrated with [tfcmt](https://github.com/suzuki-shunsuke/tfcmt) for formatted PR comments.
 
 ## Features
 
-- 🚀 **Atlantis-compatible configuration** - Uses the same `atlantis.yaml` configuration format
-- 💬 **Comment-driven workflows** - Trigger `plan` and `apply` from PR comments
-- 📊 **Beautiful output formatting** - Uses tfcmt to format Terraform output in PR comments
-- 🔍 **Auto-discovery** - Automatically discovers Terraform projects in your repository
-- 🔐 **Requirements validation** - Enforce approvals, mergeability, and other requirements
-- 🔄 **Custom workflows** - Define custom execution steps for plan and apply
-- 🌳 **Multi-project support** - Handle multiple Terraform projects in one repository
-- 🎯 **Workspace support** - Full Terraform workspace support
+- **PR Comment Triggered**: Execute Terraform via `/terraform plan` or `/terraform apply` comments
+- **Multi-Project Support**: Manage multiple Terraform projects in a single repository
+- **Autoplan**: Automatically trigger plans when specified files are modified
+- **Security First**: Blocks apply commands on forked PRs
+- **Requirements Enforcement**: Validates mergeable status and approvals before execution
+- **Serial Execution**: Processes projects sequentially for safe infrastructure changes
+- **tfcmt Integration**: Posts beautifully formatted Terraform output as PR comments
+- **TypeScript**: Clean, type-safe codebase with comprehensive error handling
 
-## Quick Start
+## Usage
 
-### 1. Add the workflow to your repository
+### Basic Setup
 
-Create `.github/workflows/terraform-pr.yml`:
+1. Create a workflow file (e.g., `.github/workflows/terraform-pr.yml`):
 
 ```yaml
-name: Terraform PR Actions
+name: Terraform PR
 
 on:
   issue_comment:
     types: [created]
 
-permissions:
-  contents: read
-  pull-requests: write
-  issues: write
-
 jobs:
   terraform:
-    if: github.event.issue.pull_request && (startsWith(github.event.comment.body, 'terraform') || startsWith(github.event.comment.body, 'atlantis'))
+    # Only run on PR comments
+    if: github.event.issue.pull_request
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: refs/pull/${{ github.event.issue.number }}/head
+      - uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.0
+          terraform_version: 1.6.0
 
-      - name: Install tfcmt
-        run: |
-          curl -L https://github.com/suzuki-shunsuke/tfcmt/releases/download/v4.11.0/tfcmt_linux_amd64.tar.gz | tar xz
-          sudo mv tfcmt /usr/local/bin/
-          sudo chmod +x /usr/local/bin/tfcmt
-
-      - name: Build and run
-        run: |
-          go build -o terraform-action ./cmd/terraform-action
-          ./terraform-action
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ATLANTIS_CONFIG_PATH: ${{ github.workspace }}/atlantis.yaml
+      - name: Terraform PR Action
+        uses: your-org/terraform-action@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          config-path: .terraform-action.yaml
 ```
 
-### 2. Create `atlantis.yaml` configuration
+2. Create a configuration file (`.terraform-action.yaml`):
 
 ```yaml
-version: 3
-automerge: false
-autodiscover:
-  mode: auto
-  ignore_paths:
-    - .github
-    - docs
-
 projects:
   - name: production
     dir: terraform/production
-    workspace: default
-    terraform_version: v1.7.0
     autoplan:
-      when_modified: ["*.tf", ".terraform.lock.hcl"]
       enabled: true
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl"]
     plan_requirements: [mergeable]
     apply_requirements: [mergeable, approved]
-```
-
-### 3. Use in Pull Requests
-
-Comment on your PR with:
-- `terraform plan` - Run plan for all affected projects
-- `terraform apply` - Run apply for all affected projects
-- `terraform plan -d terraform/production` - Run plan for specific directory
-- `terraform plan -p production` - Run plan for specific project name
-
-## Configuration
-
-The action uses an `atlantis.yaml` configuration file compatible with [Atlantis](https://www.runatlantis.io/docs/repo-level-atlantis-yaml.html).
-
-### Top-Level Configuration
-
-```yaml
-version: 3                              # Required: Config version
-automerge: true                         # Auto-merge PR after successful apply
-autodiscover:                           # Auto-discover Terraform projects
-  mode: auto
-  ignore_paths:
-    - some/path
-delete_source_branch_on_merge: true    # Delete branch after merge
-parallel_plan: true                     # Run plans in parallel
-parallel_apply: true                    # Run applies in parallel
-```
-
-### Project Configuration
-
-```yaml
-projects:
-  - name: my-project-name
-    branch: /main/                      # Regex pattern for branch matching
-    dir: .                              # Directory containing Terraform files
-    workspace: default                  # Terraform workspace
-    terraform_version: v1.7.0          # Terraform version to use
-
-    autoplan:                           # Automatic plan trigger
-      when_modified: ["*.tf", "*.tfvars"]
-      enabled: true
-
-    plan_requirements:                  # Requirements before plan
-      - mergeable
-
-    apply_requirements:                 # Requirements before apply
-      - mergeable
-      - approved
-      - undiverged
-
-    workflow: custom                    # Custom workflow name
-```
-
-### Custom Workflows
-
-Define custom execution steps:
-
-```yaml
-workflows:
-  custom:
-    plan:
-      steps:
-        - run: echo "Pre-plan hook"
-        - init
-        - plan:
-            extra_args: ["-lock=false"]
-        - run:
-            command: terraform show -json plan.tfplan
-            output: hide
-    apply:
-      steps:
-        - init
-        - apply
-        - run: echo "Post-apply hook"
-```
-
-### Requirements
-
-Available requirement types:
-- `mergeable` - PR must be mergeable (no conflicts)
-- `approved` - PR must have at least one approval
-- `undiverged` - PR branch must not be behind base branch
-
-## Commands
-
-### terraform plan
-
-Runs `terraform plan` and posts the output to the PR.
-
-```
-terraform plan
-terraform plan -d path/to/terraform
-terraform plan -p project-name
-```
-
-### terraform apply
-
-Runs `terraform apply` and posts the output to the PR.
-
-```
-terraform apply
-terraform apply -d path/to/terraform
-terraform apply -p project-name
-```
-
-### terraform help
-
-Shows available commands.
-
-```
-terraform help
-```
-
-## Environment Variables
-
-- `GITHUB_TOKEN` (required) - GitHub token for API access
-- `ATLANTIS_CONFIG_PATH` (optional) - Path to atlantis.yaml (default: `./atlantis.yaml`)
-- `TERRAFORM_BINARY` (optional) - Path to terraform binary (default: `terraform`)
-- `TFCMT_BINARY` (optional) - Path to tfcmt binary (default: `tfcmt`)
-
-## Examples
-
-### Basic Single Project
-
-```yaml
-version: 3
-projects:
-  - dir: .
-    workspace: default
-    apply_requirements: [approved]
-```
-
-### Multi-Environment Setup
-
-```yaml
-version: 3
-projects:
-  - name: dev
-    dir: terraform/dev
-    workspace: default
-    branch: /develop/
 
   - name: staging
     dir: terraform/staging
-    workspace: default
-    branch: /main/
-    apply_requirements: [approved]
+    autoplan:
+      enabled: true
+      when_modified: ["*.tf", "*.tfvars"]
+    plan_requirements: [mergeable]
+    apply_requirements: [mergeable, approved]
 
-  - name: production
-    dir: terraform/production
-    workspace: default
-    branch: /main/
-    apply_requirements: [approved, mergeable]
+tfcmt:
+  enabled: true
+  skip_no_changes: true
+  ignore_warning: false
 ```
 
-### Auto-Discovery with Custom Workflow
+### Configuration Reference
 
-```yaml
-version: 3
-autodiscover:
-  mode: auto
-  ignore_paths:
-    - examples
-    - tests
+#### Project Configuration
 
-workflows:
-  validation:
-    plan:
-      steps:
-        - run: terraform fmt -check
-        - init
-        - run: terraform validate
-        - plan
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique project name |
+| `dir` | string | Yes | Directory containing Terraform files |
+| `autoplan` | object | No | Autoplan configuration |
+| `plan_requirements` | array | No | Requirements for plan (default: `[mergeable]`) |
+| `apply_requirements` | array | No | Requirements for apply (default: `[mergeable, approved]`) |
 
-projects:
-  - workflow: validation
-    apply_requirements: [approved, mergeable, undiverged]
+#### Autoplan Configuration
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | boolean | Yes | Whether autoplan is enabled |
+| `when_modified` | array | Yes | File patterns that trigger autoplan |
+
+#### tfcmt Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `enabled` | boolean | Yes | - | Enable tfcmt integration |
+| `skip_no_changes` | boolean | No | `false` | Skip comment when no changes |
+| `ignore_warning` | boolean | No | `false` | Ignore Terraform warnings |
+
+#### Requirements
+
+- `mergeable`: PR must be in a mergeable state (no conflicts, passing checks)
+- `approved`: PR must have at least one approval
+
+### PR Comment Commands
+
+Execute Terraform commands by commenting on a pull request:
+
+```bash
+# Run plan for all projects
+/terraform plan
+
+# Run plan for specific projects
+/terraform plan -p production,staging
+
+# Run apply for all projects (requires approval)
+/terraform apply
+
+# Run apply for specific project
+/terraform apply -p production
 ```
+
+## Security
+
+### Fork Protection
+
+Apply commands are automatically blocked on forked PRs to prevent:
+- Unauthorized access to secrets
+- Malicious code execution
+- Infrastructure compromise
+
+### Requirements Enforcement
+
+By default:
+- **Plan**: Requires `mergeable` status
+- **Apply**: Requires `mergeable` status and `approved` review
+
+These can be customized per project in the configuration.
+
+### Best Practices
+
+1. **Use branch protection rules** to enforce code review
+2. **Limit who can trigger workflows** using GitHub's workflow permissions
+3. **Store sensitive variables** in GitHub Secrets or a secure secret manager
+4. **Review Terraform changes** carefully before approving apply commands
+5. **Enable CODEOWNERS** for Terraform directories
 
 ## Development
 
 ### Building
 
 ```bash
-go build -o terraform-action ./cmd/terraform-action
+# Install dependencies
+npm install
+
+# Build TypeScript
+npm run build
+
+# Clean build artifacts
+npm run clean
+
+# Full package build
+npm run package
 ```
 
-### Testing Locally
+### Project Structure
 
-```bash
-export GITHUB_TOKEN=your_token
-export GITHUB_EVENT_PATH=/path/to/event.json
-export GITHUB_WORKSPACE=/path/to/repo
-./terraform-action
+```
+terraform-action/
+├── src/
+│   ├── main.ts              # Main entry point
+│   ├── types.ts             # TypeScript type definitions
+│   ├── config.ts            # Configuration parsing/validation
+│   ├── comment-parser.ts    # PR comment parsing
+│   ├── tfcmt.ts             # tfcmt download and setup
+│   ├── terraform.ts         # Terraform execution
+│   └── pr-validation.ts     # PR requirements validation
+├── dist/                    # Compiled JavaScript (gitignored)
+├── action.yml               # Action metadata
+├── tsconfig.json            # TypeScript configuration
+└── .terraform-action.yaml   # Example configuration
 ```
 
-### Docker Build
+### Architecture
 
-```bash
-docker build -t terraform-action .
-docker run -e GITHUB_TOKEN=$GITHUB_TOKEN terraform-action
-```
+The action follows a clean, modular architecture:
+
+1. **Event Validation**: Ensures action runs only on `issue_comment` events
+2. **Comment Parsing**: Extracts Terraform command and target projects
+3. **Config Loading**: Loads and validates YAML configuration
+4. **PR Validation**: Fetches PR info and validates requirements
+5. **Security Checks**: Blocks forked PR applies
+6. **tfcmt Setup**: Downloads and configures tfcmt CLI
+7. **Terraform Execution**: Runs commands serially per project
+8. **Comment Posting**: Posts formatted output via tfcmt
+
+## Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `github-token` | Yes | - | GitHub token for API access |
+| `config-path` | No | `.terraform-action.yaml` | Path to configuration file |
+
+## Environment Variables
+
+The action requires these environment variables (automatically set by GitHub Actions):
+
+- `GITHUB_TOKEN`: Set via the `github-token` input
+- `GITHUB_REPOSITORY`: Repository name
+- `GITHUB_EVENT_PATH`: Path to event payload
 
 ## Comparison with Atlantis
 
-| Feature | This Action | Atlantis |
-|---------|------------|----------|
-| Deployment | GitHub Actions | Standalone server |
-| Configuration | atlantis.yaml | atlantis.yaml |
-| Comment triggers | ✅ | ✅ |
-| Auto-planning | ✅ | ✅ |
-| Custom workflows | ✅ | ✅ |
-| Locking | ❌ | ✅ |
-| State management | GitHub Actions | Built-in |
-| Setup complexity | Low | Medium |
+| Feature | Terraform PR Action | Atlantis |
+|---------|---------------------|----------|
+| Deployment | GitHub Action | Standalone server |
+| Language | TypeScript | Go |
+| Configuration | YAML | YAML |
+| tfcmt | Native integration | Separate setup |
+| State | Stateless | Maintains locks |
+| Complexity | Minimal | Higher |
+
+## Troubleshooting
+
+### "Terraform is not installed"
+
+Ensure you include the `hashicorp/setup-terraform` step before this action.
+
+### "Configuration file not found"
+
+Check that `.terraform-action.yaml` exists in your repository root, or specify a custom path via `config-path`.
+
+### "PR requirements not met"
+
+Verify that:
+- PR is mergeable (no conflicts)
+- PR has required approvals for apply commands
+- Branch protection rules are satisfied
+
+### "Project not found in configuration"
+
+When using `-p` flag, ensure project names exactly match those in your config file.
 
 ## License
 
-MIT
+ISC
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or PR.
+Contributions are welcome! Please ensure:
+
+1. Code follows TypeScript best practices
+2. All functions include JSDoc comments
+3. Error handling is comprehensive
+4. Changes include appropriate tests
+
+## Credits
+
+- Inspired by [Atlantis](https://www.runatlantis.io/)
+- Uses [tfcmt](https://github.com/suzuki-shunsuke/tfcmt) for PR comments
+- Built with [@actions toolkit](https://github.com/actions/toolkit)
