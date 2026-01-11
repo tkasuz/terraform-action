@@ -1,12 +1,5 @@
 terraform {
   required_version = ">= 1.0"
-
-  # Example backend - configure for your needs
-  # backend "s3" {
-  #   bucket = "my-terraform-state"
-  #   key    = "example/terraform.tfstate"
-  #   region = "us-east-1"
-  # }
 }
 
 # Example provider
