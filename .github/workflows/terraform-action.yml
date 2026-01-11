@@ -13,8 +13,6 @@ permissions:
 
 jobs:
   terraform:
-    # Only run on PR comments that start with terraform
-    if: github.event.issue.pull_request && (startsWith(github.event.comment.body, 'terraform'))
     runs-on: ubuntu-latest
 
     steps:
