@@ -26,3 +26,6 @@ jobs:
 
       - name: Run terraform-action
         uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          config-path: .terraform-action.yaml
