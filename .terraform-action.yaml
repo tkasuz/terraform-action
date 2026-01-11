@@ -1,6 +1,13 @@
 projects:
   - name: production
-    dir: examples/terraform
+    dir: examples/terraform/prod
+    autoplan:
+      enabled: true
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl"]
+    plan_requirements: []
+    apply_requirements: []
+  - name: production
+    dir: examples/terraform/dev
     autoplan:
       enabled: true
       when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl"]
