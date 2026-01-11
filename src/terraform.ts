@@ -76,6 +76,7 @@ export async function executeTerraform(
 
   let exitCode = 0;
   try {
+    exitCode = await exec.exec("terraform init", [], options)
     exitCode = await exec.exec(tfcmtPath, tfcmtArgs, options);
   } catch (error) {
     throw new Error(

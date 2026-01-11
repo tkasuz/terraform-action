@@ -37719,6 +37719,7 @@ async function executeTerraform(tfcmtPath, command, workingDir, additionalArgs =
     };
     let exitCode = 0;
     try {
+        exitCode = await exec.exec("terraform init", [], options);
         exitCode = await exec.exec(tfcmtPath, tfcmtArgs, options);
     }
     catch (error) {
