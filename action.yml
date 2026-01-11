@@ -1,5 +1,5 @@
 name: 'Terraform PR Action'
-description: 'Run Terraform plan/apply based on PR comments, similar to Atlantis, using tfcmt and go-github'
+description: 'Run Terraform plan/apply based on PR comments, similar to Atlantis, using tfcmt'
 author: 'Terraform Action Contributors'
 
 branding:
@@ -7,36 +7,14 @@ branding:
   color: 'purple'
 
 inputs:
+  github-token:
+    required: true
+    description: GitHub token for PR comments and checks
   config-path:
-    description: 'Path to terraform-action.yaml configuration file'
+    description: 'Path to .terraform-action.yaml configuration file'
     required: false
-    default: 'terraform-action.yaml'
-  working-directory:
-    description: 'Working directory (defaults to workspace root)'
-    required: false
-    default: '.'
+    default: '.terraform-action.yaml'
 
 runs:
-  using: 'composite'
-  steps:
-    - name: Download terraform-action binary
-      run: |
-        VERSION="${{ github.action_ref }}"
-        # If no version specified, use latest
-        if [ -z "$VERSION" ] || [ "$VERSION" = "main" ]; then
-          DOWNLOAD_URL="https://github.com/${{ github.action_repository }}/releases/latest/download/terraform-action-linux-amd64"
-        else
-          DOWNLOAD_URL="https://github.com/${{ github.action_repository }}/releases/download/${VERSION}/terraform-action-linux-amd64"
-        fi
-
-        echo "Downloading terraform-action from $DOWNLOAD_URL"
-        curl -sL "$DOWNLOAD_URL" -o ${{ runner.temp }}/terraform-action
-        chmod +x ${{ runner.temp }}/terraform-action
-      shell: bash
-
-    - name: Run terraform-action
-      run: ${{ runner.temp }}/terraform-action
-      shell: bash
-      env:
-        TERRAFORM_ACTION_CONFIG_PATH: ${{ inputs.config-path }}
-        GITHUB_WORKSPACE: ${{ inputs.working-directory }}
+  using: 'node20'
+  main: 'dist/main.js'
