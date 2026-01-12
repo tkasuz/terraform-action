@@ -7,12 +7,12 @@ provider "random" {}
 
 # Example resource
 resource "random_pet" "example" {
-  length    = 2
+  length    = 5
   separator = "-"
 }
 
 # Example output
 output "pet_name" {
   value       = random_pet.example.id
-  description = "The generated pet name"
+  description = "The generated pet name for prod"
 }
