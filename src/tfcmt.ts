@@ -2,11 +2,11 @@
  * tfcmt CLI download and setup logic
  */
 
-import * as tc from '@actions/tool-cache';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import * as core from '@actions/core';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as tc from '@actions/tool-cache';
 
 /**
  * Maps Node.js platform to tfcmt platform naming
@@ -62,13 +62,13 @@ export async function setupTfcmt(version = 'latest'): Promise<string> {
   const arch = getTfcmtArch();
 
   // Construct download URL
-  const fileName = platform === 'windows'
-    ? `tfcmt_${platform}_${arch}.zip`
-    : `tfcmt_${platform}_${arch}.tar.gz`;
+  const fileName =
+    platform === 'windows' ? `tfcmt_${platform}_${arch}.zip` : `tfcmt_${platform}_${arch}.tar.gz`;
 
-  const url = version === 'latest'
-    ? `https://github.com/suzuki-shunsuke/tfcmt/releases/latest/download/${fileName}`
-    : `https://github.com/suzuki-shunsuke/tfcmt/releases/download/${version}/${fileName}`;
+  const url =
+    version === 'latest'
+      ? `https://github.com/suzuki-shunsuke/tfcmt/releases/latest/download/${fileName}`
+      : `https://github.com/suzuki-shunsuke/tfcmt/releases/download/${version}/${fileName}`;
 
   core.info(`Downloading tfcmt from ${url}`);
 

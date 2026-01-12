@@ -2,21 +2,22 @@
  * Main entry point for Terraform PR Comment Action
  */
 
+import * as path from 'node:path';
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import * as path from 'path';
-import { loadConfig, getDefaultRequirements } from './config';
+import { downloadPlanFile, uploadPlanFile } from './artifact-manager';
 import { parseComment, validateProjectNames } from './comment-parser';
-import { setupTfcmt } from './tfcmt';
-import { executeTerraformWithTfcmt, validateTerraformInstalled } from './terraform';
+import { getDefaultRequirements, loadConfig } from './config';
 import {
-  getPullRequestInfo,
-  validateRequirements,
-  validateEventType,
-  getPRNumberFromContext,
   getCommentBodyFromContext,
+  getPRNumberFromContext,
+  getPullRequestInfo,
+  validateEventType,
+  validateRequirements,
 } from './pr-validation';
-import { ProjectConfig, PullRequestInfo, TerraformCommand } from './types';
+import { executeTerraformWithTfcmt, validateTerraformInstalled } from './terraform';
+import { setupTfcmt } from './tfcmt';
+import type { ProjectConfig, PullRequestInfo, TerraformCommand } from './types';
 
 /**
  * Main action execution
@@ -40,9 +41,9 @@ async function run(): Promise<void> {
     const config = loadConfig(configPath);
     core.info(`Loaded configuration with ${config.projects.length} project(s)`);
 
-    let targetProjectNames: string[] = config.projects.map((p) => p.name); 
-    let command: TerraformCommand = 'plan'
-    let args: string[] = []
+    let targetProjectNames: string[] = config.projects.map((p) => p.name);
+    let command: TerraformCommand = 'plan';
+    let args: string[] = [];
 
     // Extract comment body
     if (github.context.eventName === 'issue_comment') {
@@ -60,17 +61,16 @@ async function run(): Promise<void> {
 
       if (parsedComment.projects.length > 0) {
         validateProjectNames(parsedComment.projects, targetProjectNames);
-        targetProjectNames = parsedComment.projects
+        targetProjectNames = parsedComment.projects;
 
         core.info(`Target projects: ${targetProjectNames.join(', ')}`);
       }
-      command = parsedComment.command
-      args = parsedComment.args
+      command = parsedComment.command;
+      args = parsedComment.args;
     }
 
-
     // Get PR information
-    let pr: PullRequestInfo | null = null
+    let pr: PullRequestInfo | null = null;
     if (command === 'apply') {
       const prNumber = getPRNumberFromContext(github.context);
       pr = await getPullRequestInfo(
@@ -86,13 +86,16 @@ async function run(): Promise<void> {
 
     // Execute terraform for each target project serially
     for (const projectName of targetProjectNames) {
+      const project = config.projects.find((p) => p.name === projectName);
+      if (!project) {
+        throw new Error(`Project not found: ${projectName}`);
+      }
       await executeProjectCommand(
-        config.projects.find((p) => p.name === projectName)!,
+        project,
         command,
         args,
         pr,
-        tfcmtPath,
-        config.tfcmt
+        tfcmtPath
       );
     }
 
@@ -118,9 +121,8 @@ async function executeProjectCommand(
   project: ProjectConfig,
   command: 'plan' | 'apply',
   args: string[],
-  pr: PullRequestInfo | null, 
-  tfcmtPath: string,
-  tfcmtConfig?: { enabled: boolean; skip_no_changes?: boolean; ignore_warning?: boolean }
+  pr: PullRequestInfo | null,
+  tfcmtPath: string
 ): Promise<void> {
   core.info(`\n${'='.repeat(60)}`);
   core.info(`Project: ${project.name}`);
@@ -130,8 +132,8 @@ async function executeProjectCommand(
   // Get requirements for this command
   const requirements =
     command === 'plan'
-      ? project.plan_requirements ?? getDefaultRequirements('plan')
-      : project.apply_requirements ?? getDefaultRequirements('apply');
+      ? (project.plan_requirements ?? getDefaultRequirements('plan'))
+      : (project.apply_requirements ?? getDefaultRequirements('apply'));
 
   core.info(`Requirements: ${requirements.join(', ')}`);
 
@@ -144,6 +146,19 @@ async function executeProjectCommand(
   // Resolve working directory
   const workingDir = path.resolve(project.dir);
 
+  // For apply command, try to download the plan file artifact
+  let planFilePath: string | undefined;
+  if (command === 'apply') {
+    try {
+      planFilePath = await downloadPlanFile(project.name, workingDir);
+      core.info(`Using plan file from artifact: ${planFilePath}`);
+    } catch (error) {
+      core.warning(
+        `Could not download plan file artifact for project ${project.name}. Will proceed with apply without saved plan. Error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
   // Execute terraform with tfcmt
   const result = await executeTerraformWithTfcmt(
     tfcmtPath,
@@ -151,15 +166,27 @@ async function executeProjectCommand(
     project.name,
     workingDir,
     args,
-    tfcmtConfig
+    planFilePath
   );
 
-  // Log results
+  // Log results and upload plan file if this was a plan command
   if (command === 'plan') {
     if (result.hasChanges) {
       core.info('Changes detected in plan');
     } else {
       core.info('No changes detected in plan');
+    }
+
+    // Upload plan file as artifact for later use during apply
+    if (result.planFilePath) {
+      try {
+        await uploadPlanFile(result.planFilePath, project.name);
+        core.info(`Plan file uploaded as artifact for project: ${project.name}`);
+      } catch (error) {
+        core.warning(
+          `Failed to upload plan file artifact. Apply will proceed without saved plan. Error: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
     }
   } else {
     core.info('Apply completed successfully');
