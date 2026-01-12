@@ -7,7 +7,7 @@ import { parseComment, validateProjectNames, getTargetProjects } from './comment
 describe('comment-parser', () => {
   describe('parseComment', () => {
     it('should parse basic plan command', () => {
-      const result = parseComment('@terraform plan');
+      const result = parseComment('terraform plan');
 
       expect(result).toEqual({
         command: 'plan',
@@ -17,7 +17,7 @@ describe('comment-parser', () => {
     });
 
     it('should parse basic apply command', () => {
-      const result = parseComment('@terraform apply');
+      const result = parseComment('terraform apply');
 
       expect(result).toEqual({
         command: 'apply',
@@ -27,7 +27,7 @@ describe('comment-parser', () => {
     });
 
     it('should parse command with single project', () => {
-      const result = parseComment('@terraform plan -project=production');
+      const result = parseComment('terraform plan -project=production');
 
       expect(result).toEqual({
         command: 'plan',
@@ -37,7 +37,7 @@ describe('comment-parser', () => {
     });
 
     it('should parse command with multiple projects', () => {
-      const result = parseComment('@terraform apply -project=production,staging');
+      const result = parseComment('terraform apply -project=production,staging');
 
       expect(result).toEqual({
         command: 'apply',
@@ -47,7 +47,7 @@ describe('comment-parser', () => {
     });
 
     it('should parse command with multiple projects without spaces', () => {
-      const result = parseComment('@terraform plan -project=production,staging,development');
+      const result = parseComment('terraform plan -project=production,staging,development');
 
       expect(result).toEqual({
         command: 'plan',
@@ -57,7 +57,7 @@ describe('comment-parser', () => {
     });
 
     it('should parse command with target argument', () => {
-      const result = parseComment('@terraform plan -target=aws_instance.example');
+      const result = parseComment('terraform plan -target=aws_instance.example');
 
       expect(result).toEqual({
         command: 'plan',
@@ -68,7 +68,7 @@ describe('comment-parser', () => {
 
     it('should parse command with multiple arguments', () => {
       const result = parseComment(
-        '@terraform plan -target=aws_instance.example -var-file=prod.tfvars'
+        'terraform plan -target=aws_instance.example -var-file=prod.tfvars'
       );
 
       expect(result).toEqual({
@@ -80,7 +80,7 @@ describe('comment-parser', () => {
 
     it('should parse command with project and arguments', () => {
       const result = parseComment(
-        '@terraform plan -project=staging -target=aws_instance.example'
+        'terraform plan -project=staging -target=aws_instance.example'
       );
 
       expect(result).toEqual({
@@ -92,7 +92,7 @@ describe('comment-parser', () => {
 
     it('should parse command with multiple projects and arguments', () => {
       const result = parseComment(
-        '@terraform apply -project=production,staging -var-file=prod.tfvars -target=aws_instance.web'
+        'terraform apply -project=production,staging -var-file=prod.tfvars -target=aws_instance.web'
       );
 
       expect(result).toEqual({
@@ -103,7 +103,7 @@ describe('comment-parser', () => {
     });
 
     it('should handle quoted arguments', () => {
-      const result = parseComment('@terraform plan -var="foo=bar baz"');
+      const result = parseComment('terraform plan -var="foo=bar baz"');
 
       expect(result).toEqual({
         command: 'plan',
@@ -113,7 +113,7 @@ describe('comment-parser', () => {
     });
 
     it('should handle single quoted arguments', () => {
-      const result = parseComment("@terraform plan -var='foo=bar baz'");
+      const result = parseComment("terraform plan -var='foo=bar baz'");
 
       expect(result).toEqual({
         command: 'plan',
@@ -123,7 +123,7 @@ describe('comment-parser', () => {
     });
 
     it('should handle multiple quoted arguments', () => {
-      const result = parseComment('@terraform plan -var="foo=bar" -var="baz=qux"');
+      const result = parseComment('terraform plan -var="foo=bar" -var="baz=qux"');
 
       expect(result).toEqual({
         command: 'plan',
@@ -133,7 +133,7 @@ describe('comment-parser', () => {
     });
 
     it('should trim whitespace from comment', () => {
-      const result = parseComment('  @terraform plan  ');
+      const result = parseComment('  terraform plan  ');
 
       expect(result).toEqual({
         command: 'plan',
@@ -142,21 +142,13 @@ describe('comment-parser', () => {
       });
     });
 
-    it('should return null for non-terraform comments', () => {
-      expect(parseComment('Just a regular comment')).toBeNull();
-      expect(parseComment('This mentions terraform but is not a command')).toBeNull();
-      expect(parseComment('@terraform')).toBeNull();
-      expect(parseComment('terraform plan')).toBeNull(); // Missing @
-      expect(parseComment('@terraform invalid')).toBeNull();
-    });
-
     it('should return null for empty comment', () => {
       expect(parseComment('')).toBeNull();
     });
 
     it('should handle complex real-world examples', () => {
       const result = parseComment(
-        '@terraform plan -project=prod-us-east,prod-us-west -target=module.vpc -var-file=production.tfvars'
+        'terraform plan -project=prod-us-east,prod-us-west -target=module.vpc -var-file=production.tfvars'
       );
 
       expect(result).toEqual({
@@ -167,7 +159,7 @@ describe('comment-parser', () => {
     });
 
     it('should handle empty project list in -project flag', () => {
-      const result = parseComment('@terraform plan -project=');
+      const result = parseComment('terraform plan -project=');
 
       expect(result).toEqual({
         command: 'plan',
@@ -177,7 +169,7 @@ describe('comment-parser', () => {
     });
 
     it('should filter out empty project names from comma-separated list', () => {
-      const result = parseComment('@terraform plan -project=prod,,staging,');
+      const result = parseComment('terraform plan -project=prod,,staging,');
 
       expect(result).toEqual({
         command: 'plan',

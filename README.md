@@ -104,16 +104,16 @@ Comment on a pull request:
 
 ```bash
 # 📋 Plan all projects
-@terraform plan
+terraform plan
 
 # 📋 Plan specific projects
-@terraform plan -project=production,staging
+terraform plan -project=production,staging
 
 # 🚀 Apply all projects
-@terraform apply
+terraform apply
 
 # 🚀 Apply specific project
-@terraform apply -project=production
+terraform apply -project=production
 ```
 
 ---
@@ -171,11 +171,3 @@ Check that project names in <code>-p</code> flag match your config file.
 ## 📄 License
 
 [MIT](LICENSE)
-
----
-
-<div align="center">
-
-**Made with ❤️ for Terraform workflows**
-
-</div>
