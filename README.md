@@ -104,16 +104,16 @@ Comment on a pull request:
 
 ```bash
 # 📋 Plan all projects
-terraform plan
+@terraform plan
 
 # 📋 Plan specific projects
-terraform plan -p production,staging
+@terraform plan -project=production,staging
 
 # 🚀 Apply all projects
-terraform apply
+@terraform apply
 
 # 🚀 Apply specific project
-terraform apply -p production
+@terraform apply -project=production
 ```
 
 ---

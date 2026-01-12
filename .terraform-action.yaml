@@ -13,8 +13,3 @@ projects:
       when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl"]
     plan_requirements: []
     apply_requirements: []
-
-tfcmt:
-  enabled: true
-  skip_no_changes: true
-  ignore_warning: false

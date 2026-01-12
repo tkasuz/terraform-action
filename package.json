@@ -24,6 +24,7 @@
   "author": "Terraform Action Contributors",
   "license": "MIT",
   "dependencies": {
+    "@actions/artifact": "^5.0.2",
     "@actions/core": "^2.0.2",
     "@actions/exec": "^2.0.0",
     "@actions/github": "^7.0.0",

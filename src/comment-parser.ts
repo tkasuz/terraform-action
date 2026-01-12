@@ -2,13 +2,13 @@
  * PR comment parsing logic
  */
 
-import { ParsedComment, TerraformCommand } from './types';
+import type { ParsedComment, TerraformCommand } from './types';
 
 /**
  * Regular expression to match terraform commands in comments
- * Matches: /terraform plan|apply [optional arguments]
+ * Matches: @terraform plan|apply [optional arguments]
  */
-const TERRAFORM_COMMAND_REGEX = /^\/terraform\s+(plan|apply)(?:\s+(.+))?$/;
+const TERRAFORM_COMMAND_REGEX = /^\@terraform\s+(plan|apply)(?:\s+(.+))?$/;
 
 /**
  * Parses a PR comment to extract terraform command, target projects, and additional arguments
@@ -17,19 +17,19 @@ const TERRAFORM_COMMAND_REGEX = /^\/terraform\s+(plan|apply)(?:\s+(.+))?$/;
  * @returns Parsed comment or null if comment doesn't contain a terraform command
  *
  * @example
- * parseComment('/terraform plan')
+ * parseComment('@terraform plan')
  * // => { command: 'plan', projects: [], args: [] }
  *
  * @example
- * parseComment('/terraform apply -project production,staging')
+ * parseComment('@terraform apply -project=production,staging')
  * // => { command: 'apply', projects: ['production', 'staging'], args: [] }
  *
  * @example
- * parseComment('/terraform plan -project staging -target=aws_instance.example')
+ * parseComment('@terraform plan -project=staging -target=aws_instance.example')
  * // => { command: 'plan', projects: ['staging'], args: ['-target=aws_instance.example'] }
  *
  * @example
- * parseComment('/terraform plan -target=aws_instance.example -var-file=prod.tfvars')
+ * parseComment('@terraform plan -target=aws_instance.example -var-file=prod.tfvars')
  * // => { command: 'plan', projects: [], args: ['-target=aws_instance.example', '-var-file=prod.tfvars'] }
  *
  * @example
@@ -67,7 +67,7 @@ export function parseComment(commentBody: string): ParsedComment | null {
  * @returns Object with projects array and args array
  *
  * @example
- * parseArguments('-project production,staging -target=aws_instance.example')
+ * parseArguments('-project=production,staging -target=aws_instance.example')
  * // => { projects: ['production', 'staging'], args: ['-target=aws_instance.example'] }
  *
  * @example
@@ -83,19 +83,19 @@ function parseArguments(argsString: string): { projects: string[]; args: string[
   const projects: string[] = [];
   const args: string[] = [];
 
-  let i = 0;
-  while (i < tokens.length) {
-    const token = tokens[i];
-
-    if (token === '-project' && i + 1 < tokens.length) {
-      // Next token is the project list
-      const projectList = tokens[i + 1];
-      projects.push(...projectList.split(',').map((p) => p.trim()).filter((p) => p.length > 0));
-      i += 2;
+  for (const token of tokens) {
+    // Check for -project=value format
+    if (token.startsWith('-project=')) {
+      const projectList = token.substring('-project='.length);
+      projects.push(
+        ...projectList
+          .split(',')
+          .map((p) => p.trim())
+          .filter((p) => p.length > 0)
+      );
     } else {
       // It's a regular terraform argument
       args.push(token);
-      i += 1;
     }
   }
 
@@ -161,8 +161,7 @@ export function validateProjectNames(
     if (!configuredSet.has(project)) {
       const available = configuredProjects.join(', ');
       throw new Error(
-        `Project '${project}' not found in configuration. ` +
-        `Available projects: ${available}`
+        `Project '${project}' not found in configuration. ` + `Available projects: ${available}`
       );
     }
   }
@@ -179,10 +178,7 @@ export function validateProjectNames(
  * - If specific projects are requested, returns only those projects
  * - If no projects specified, returns all projects
  */
-export function getTargetProjects(
-  parsedComment: ParsedComment,
-  allProjects: string[]
-): string[] {
+export function getTargetProjects(parsedComment: ParsedComment, allProjects: string[]): string[] {
   // If specific projects requested, validate and return them
   if (parsedComment.projects.length > 0) {
     validateProjectNames(parsedComment.projects, allProjects);

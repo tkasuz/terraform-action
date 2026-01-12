@@ -39,25 +39,11 @@ export interface ProjectConfig {
 }
 
 /**
- * tfcmt configuration
- */
-export interface TfcmtConfig {
-  /** Whether tfcmt is enabled */
-  enabled: boolean;
-  /** Skip commenting when no changes detected */
-  skip_no_changes?: boolean;
-  /** Ignore Terraform warnings */
-  ignore_warning?: boolean;
-}
-
-/**
  * Root configuration file structure
  */
 export interface Config {
   /** List of Terraform projects */
   projects: ProjectConfig[];
-  /** tfcmt configuration */
-  tfcmt?: TfcmtConfig;
 }
 
 /**
@@ -104,6 +90,8 @@ export interface TerraformResult {
   stdout: string;
   /** Standard error */
   stderr: string;
+  /** Path to plan file (for plan command) */
+  planFilePath?: string;
 }
 
 /**

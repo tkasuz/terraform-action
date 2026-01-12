@@ -4,7 +4,7 @@
 
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import { PullRequestInfo, Requirement } from './types';
+import type { PullRequestInfo, Requirement } from './types';
 
 /**
  * Fetches pull request information from GitHub API
@@ -63,7 +63,9 @@ export async function getPullRequestInfo(
 
   const approved = hasApproval && !hasChangesRequested;
 
-  core.info(`PR #${prNumber} status: isFork=${isFork}, mergeable=${mergeable}, approved=${approved}`);
+  core.info(
+    `PR #${prNumber} status: isFork=${isFork}, mergeable=${mergeable}, approved=${approved}`
+  );
 
   return {
     number: prNumber,
@@ -83,10 +85,7 @@ export async function getPullRequestInfo(
  * @param requirements - Array of requirements to validate
  * @throws Error if any requirement is not met
  */
-export function validateRequirements(
-  pr: PullRequestInfo,
-  requirements: Requirement[]
-): void {
+export function validateRequirements(pr: PullRequestInfo, requirements: Requirement[]): void {
   const failures: string[] = [];
 
   for (const requirement of requirements) {
@@ -106,9 +105,7 @@ export function validateRequirements(
   }
 
   if (failures.length > 0) {
-    throw new Error(
-      `PR requirements not met:\n${failures.map((f) => `  - ${f}`).join('\n')}`
-    );
+    throw new Error(`PR requirements not met:\n${failures.map((f) => `  - ${f}`).join('\n')}`);
   }
 }
 
@@ -139,7 +136,7 @@ export function getPRNumberFromContext(context: typeof github.context): number {
   if (!prNumber) {
     throw new Error(
       'Could not determine PR number from context. ' +
-      'Ensure this action is triggered by an issue_comment event on a pull request.'
+        'Ensure this action is triggered by an issue_comment event on a pull request.'
     );
   }
 

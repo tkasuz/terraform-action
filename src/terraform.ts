@@ -2,9 +2,10 @@
  * Terraform execution logic
  */
 
+import * as path from 'node:path';
 import * as core from '@actions/core';
 import * as exec from '@actions/exec';
-import { TerraformCommand, TerraformResult, TfcmtConfig } from './types';
+import type { TerraformCommand, TerraformResult } from './types';
 
 /**
  * Executes Terraform command wrapped with tfcmt
@@ -12,8 +13,9 @@ import { TerraformCommand, TerraformResult, TfcmtConfig } from './types';
  * @param tfcmtPath - Path to tfcmt binary
  * @param command - Terraform command to execute ('plan' or 'apply')
  * @param workingDir - Directory containing Terraform files
+ * @param projectName - Name of the project (used for plan file naming)
  * @param additionalArgs - Additional terraform arguments (e.g., -target, -var-file)
- * @param tfcmtConfig - Optional tfcmt configuration
+ * @param planFilePath - Path to existing plan file (for apply command)
  * @returns Terraform execution result
  *
  * @remarks
@@ -21,13 +23,16 @@ import { TerraformCommand, TerraformResult, TfcmtConfig } from './types';
  * - Terraform plan returns exit code 0 for no changes, 2 for changes detected, 1 for errors
  * - Terraform apply returns exit code 0 for success, 1 for errors
  * - tfcmt automatically posts output as PR comment
+ * - For plan commands, saves plan file to <workingDir>/tfplan-<projectName>
+ * - For apply commands, uses provided planFilePath if available
  */
 export async function executeTerraform(
   tfcmtPath: string,
   command: TerraformCommand,
   workingDir: string,
+  projectName: string,
   additionalArgs: string[] = [],
-  tfcmtConfig?: TfcmtConfig
+  planFilePath?: string
 ): Promise<TerraformResult> {
   const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
   core.info(`Executing terraform ${command}${argsStr} in ${workingDir}`);
@@ -35,27 +40,31 @@ export async function executeTerraform(
   // Build tfcmt arguments: tfcmt [flags] plan|apply -- terraform [command] [args]
   const tfcmtArgs: string[] = [command];
 
-  // Add tfcmt configuration flags
-  if (tfcmtConfig?.skip_no_changes) {
-    tfcmtArgs.push('--skip-no-changes');
-  }
-
-  if (tfcmtConfig?.ignore_warning) {
-    tfcmtArgs.push('--ignore-warning');
-  }
-
   // Add separator and terraform command
   tfcmtArgs.push('--');
   tfcmtArgs.push('terraform');
   tfcmtArgs.push(command);
+
+  // Generate plan file path for plan command, or use provided path for apply
+  let resultPlanFilePath: string | undefined;
+
+  if (command === 'plan') {
+    // Save plan to a file: tfplan-<projectName>
+    resultPlanFilePath = path.join(workingDir, `tfplan-${projectName}`);
+    tfcmtArgs.push(`-out=${resultPlanFilePath}`);
+    core.info(`Plan will be saved to: ${resultPlanFilePath}`);
+  } else if (command === 'apply' && planFilePath) {
+    // Use existing plan file
+    tfcmtArgs.push(planFilePath);
+    core.info(`Applying existing plan from: ${planFilePath}`);
+  } else if (command === 'apply') {
+    // Apply without plan file (legacy behavior)
+    tfcmtArgs.push('-auto-approve');
+  }
+
   tfcmtArgs.push(...additionalArgs);
   tfcmtArgs.push('-no-color');
   tfcmtArgs.push('-input=false');
-
-  // Add auto-approve for apply
-  if (command === 'apply') {
-    tfcmtArgs.push('-auto-approve');
-  }
 
   // Capture stdout and stderr
   let stdout = '';
@@ -76,7 +85,7 @@ export async function executeTerraform(
 
   let exitCode = 0;
   try {
-    exitCode = await exec.exec("terraform init", [], options)
+    exitCode = await exec.exec('terraform init', [], options);
     exitCode = await exec.exec(tfcmtPath, tfcmtArgs, options);
   } catch (error) {
     throw new Error(
@@ -99,9 +108,9 @@ export async function executeTerraform(
     hasChanges,
     stdout,
     stderr,
+    planFilePath: resultPlanFilePath,
   };
 }
-
 
 /**
  * Executes Terraform command with tfcmt integration
@@ -111,7 +120,7 @@ export async function executeTerraform(
  * @param projectName - Name of the project being executed
  * @param workingDir - Directory containing Terraform files
  * @param additionalArgs - Additional terraform arguments
- * @param tfcmtConfig - Optional tfcmt configuration
+ * @param planFilePath - Path to existing plan file (for apply command)
  * @returns Terraform execution result
  *
  * @remarks
@@ -123,19 +132,20 @@ export async function executeTerraformWithTfcmt(
   projectName: string,
   workingDir: string,
   additionalArgs: string[] = [],
-  tfcmtConfig?: TfcmtConfig
+  planFilePath?: string
 ): Promise<TerraformResult> {
   const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
   core.startGroup(`Executing terraform ${command}${argsStr} for project: ${projectName}`);
 
   try {
-    // Execute Terraform wrapped with tfcmt if enabled
-    if (tfcmtConfig?.enabled) {
-      return await executeTerraform(tfcmtPath, command, workingDir, additionalArgs, tfcmtConfig);
-    } else {
-      // Execute Terraform without tfcmt
-      return await executeTerraform(tfcmtPath, command, workingDir, additionalArgs);
-    }
+    return await executeTerraform(
+      tfcmtPath,
+      command,
+      workingDir,
+      projectName,
+      additionalArgs,
+      planFilePath
+    );
   } finally {
     core.endGroup();
   }
@@ -151,10 +161,10 @@ export async function validateTerraformInstalled(): Promise<void> {
 
   try {
     await exec.exec('terraform', ['version']);
-  } catch (error) {
+  } catch (_error) {
     throw new Error(
       'Terraform is not installed or not available in PATH. ' +
-      'Please ensure Terraform is installed before running this action.'
+        'Please ensure Terraform is installed before running this action.'
     );
   }
 }

@@ -2,8 +2,8 @@
  * Configuration parsing and validation
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as yaml from 'js-yaml';
 import type { Config, ProjectConfig, Requirement } from './types';
 
@@ -130,35 +130,6 @@ function validateConfig(config: unknown): Config {
 
   const validated: Config = { projects };
 
-  // Validate tfcmt configuration if present
-  if (c.tfcmt !== undefined) {
-    if (typeof c.tfcmt !== 'object' || c.tfcmt === null) {
-      throw new Error('tfcmt configuration must be an object');
-    }
-
-    const tfcmt = c.tfcmt as Record<string, unknown>;
-
-    if (typeof tfcmt.enabled !== 'boolean') {
-      throw new Error('tfcmt.enabled must be a boolean');
-    }
-
-    validated.tfcmt = { enabled: tfcmt.enabled };
-
-    if (tfcmt.skip_no_changes !== undefined) {
-      if (typeof tfcmt.skip_no_changes !== 'boolean') {
-        throw new Error('tfcmt.skip_no_changes must be a boolean');
-      }
-      validated.tfcmt.skip_no_changes = tfcmt.skip_no_changes;
-    }
-
-    if (tfcmt.ignore_warning !== undefined) {
-      if (typeof tfcmt.ignore_warning !== 'boolean') {
-        throw new Error('tfcmt.ignore_warning must be a boolean');
-      }
-      validated.tfcmt.ignore_warning = tfcmt.ignore_warning;
-    }
-  }
-
   return validated;
 }
 
@@ -183,7 +154,9 @@ export function loadConfig(configPath: string): Config {
   try {
     content = fs.readFileSync(absolutePath, 'utf8');
   } catch (error) {
-    throw new Error(`Failed to read configuration file: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Failed to read configuration file: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 
   // Parse YAML
@@ -191,7 +164,9 @@ export function loadConfig(configPath: string): Config {
   try {
     parsed = yaml.load(content);
   } catch (error) {
-    throw new Error(`Failed to parse YAML: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Failed to parse YAML: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 
   // Validate and return
@@ -205,7 +180,5 @@ export function loadConfig(configPath: string): Config {
  * @returns Default requirements array
  */
 export function getDefaultRequirements(command: 'plan' | 'apply'): Requirement[] {
-  return command === 'apply'
-    ? ['mergeable', 'approved']
-    : ['mergeable'];
+  return command === 'apply' ? ['mergeable', 'approved'] : ['mergeable'];
 }
