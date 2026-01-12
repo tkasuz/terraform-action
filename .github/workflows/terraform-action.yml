@@ -31,8 +31,8 @@ jobs:
         with:
           terraform_version: 1.7.0
 
-      - name: Run terraform-action
+      - name: Run terraform-action on local
         uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          config-path: .terraform-action.yaml
+          config-path: examples/.terraform-action.yaml

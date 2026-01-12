@@ -13,13 +13,14 @@ import type { TerraformCommand, TerraformResult } from './types';
  * @param tfcmtPath - Path to tfcmt binary
  * @param command - Terraform command to execute ('plan' or 'apply')
  * @param workingDir - Directory containing Terraform files
- * @param projectName - Name of the project (used for plan file naming)
+ * @param projectName - Name of the project (used for plan file naming and tfcmt target)
  * @param additionalArgs - Additional terraform arguments (e.g., -target, -var-file)
  * @param planFilePath - Path to existing plan file (for apply command)
  * @returns Terraform execution result
  *
  * @remarks
- * Executes: tfcmt plan -- terraform plan [args]
+ * Executes: tfcmt -var "target:<projectName>" plan -- terraform plan [args]
+ * - Uses tfcmt's target variable for monorepo support to prefix PR labels and comment titles
  * - Terraform plan returns exit code 0 for no changes, 2 for changes detected, 1 for errors
  * - Terraform apply returns exit code 0 for success, 1 for errors
  * - tfcmt automatically posts output as PR comment
@@ -37,8 +38,16 @@ export async function executeTerraform(
   const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
   core.info(`Executing terraform ${command}${argsStr} in ${workingDir}`);
 
-  // Build tfcmt arguments: tfcmt [flags] plan|apply -- terraform [command] [args]
-  const tfcmtArgs: string[] = [command];
+  // Build tfcmt arguments: tfcmt [flags] -var "target:<project>" plan|apply -- terraform [command] [args]
+  const tfcmtArgs: string[] = [];
+
+  // Add target variable for monorepo support
+  // This will prefix PR labels and comment titles with the project name
+  tfcmtArgs.push('-var');
+  tfcmtArgs.push(`target:${projectName}`);
+
+  // Add command
+  tfcmtArgs.push(command);
 
   // Add separator and terraform command
   tfcmtArgs.push('--');
