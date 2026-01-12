@@ -4,7 +4,7 @@ author: 'tkasuz'
 
 branding:
   icon: 'cloud'
-  color: 'purple'
+  color: 'blue'
 
 inputs:
   github-token:
