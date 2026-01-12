@@ -138,13 +138,6 @@ Comment on a pull request:
 | `mergeable` | PR must be mergeable (no conflicts, passing checks) |
 | `approved` | PR must have at least one approval |
 
-### 💬 tfcmt Settings
-
-| Field | Default | Description |
-|-------|:-------:|-------------|
-| `enabled` | - | Enable formatted PR comments |
-| `skip_no_changes` | `false` | Skip comment when no changes detected |
-
 ---
 
 ## 🔧 Troubleshooting
