@@ -1,4 +1,4 @@
-name: 'Terraform PR Action'
+name: 'Terraform PR Comment Runner'
 description: 'Run Terraform plan/apply based on PR comments, similar to Atlantis, using tfcmt'
 author: 'tkasuz'
 
