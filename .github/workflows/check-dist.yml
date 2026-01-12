@@ -43,7 +43,7 @@ jobs:
         id: diff
 
       - name: Upload artifact as debugging aid if check failed
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: ${{ failure() && steps.diff.conclusion == 'failure' }}
         with:
           name: dist
