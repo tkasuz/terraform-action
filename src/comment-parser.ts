@@ -6,9 +6,9 @@ import type { ParsedComment, TerraformCommand } from './types';
 
 /**
  * Regular expression to match terraform commands in comments
- * Matches: @terraform plan|apply [optional arguments]
+ * Matches: terraform plan|apply [optional arguments]
  */
-const TERRAFORM_COMMAND_REGEX = /^\@terraform\s+(plan|apply)(?:\s+(.+))?$/;
+const TERRAFORM_COMMAND_REGEX = /^terraform\s+(plan|apply)(?:\s+(.+))?$/;
 
 /**
  * Parses a PR comment to extract terraform command, target projects, and additional arguments
@@ -17,19 +17,19 @@ const TERRAFORM_COMMAND_REGEX = /^\@terraform\s+(plan|apply)(?:\s+(.+))?$/;
  * @returns Parsed comment or null if comment doesn't contain a terraform command
  *
  * @example
- * parseComment('@terraform plan')
+ * parseComment('terraform plan')
  * // => { command: 'plan', projects: [], args: [] }
  *
  * @example
- * parseComment('@terraform apply -project=production,staging')
+ * parseComment('terraform apply -project=production,staging')
  * // => { command: 'apply', projects: ['production', 'staging'], args: [] }
  *
  * @example
- * parseComment('@terraform plan -project=staging -target=aws_instance.example')
+ * parseComment('terraform plan -project=staging -target=aws_instance.example')
  * // => { command: 'plan', projects: ['staging'], args: ['-target=aws_instance.example'] }
  *
  * @example
- * parseComment('@terraform plan -target=aws_instance.example -var-file=prod.tfvars')
+ * parseComment('terraform plan -target=aws_instance.example -var-file=prod.tfvars')
  * // => { command: 'plan', projects: [], args: ['-target=aws_instance.example', '-var-file=prod.tfvars'] }
  *
  * @example

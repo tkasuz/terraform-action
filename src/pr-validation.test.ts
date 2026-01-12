@@ -441,14 +441,14 @@ describe('pr-validation', () => {
       const context = {
         payload: {
           comment: {
-            body: '@terraform plan',
+            body: 'terraform plan',
           },
         },
       } as any;
 
       const commentBody = getCommentBodyFromContext(context);
 
-      expect(commentBody).toBe('@terraform plan');
+      expect(commentBody).toBe('terraform plan');
     });
 
     it('should throw when comment body is not available', () => {
