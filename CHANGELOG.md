@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.0](https://github.com/tkasuz/terraform-action/compare/v1.0.0...v1.1.0) (2026-01-12)
+
+
+### Features
+
+* Branding color and icon ([1096ab0](https://github.com/tkasuz/terraform-action/commit/1096ab035f1cd7fe8e2b9a981bc78501c7827a2a))
+* Rename action.yml ([#12](https://github.com/tkasuz/terraform-action/issues/12)) ([da1b22d](https://github.com/tkasuz/terraform-action/commit/da1b22d87314c554b4ac2b3e5313ee19a76df570))
+
+
+### Bug Fixes
+
+* Use GITHUB_TOKEN for release please ([1023a88](https://github.com/tkasuz/terraform-action/commit/1023a88cbe80f5d1933d72e76c69e35200d03fde))
+
 ## 1.0.0 (2026-01-12)
 
 
