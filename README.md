@@ -65,7 +65,7 @@ jobs:
           terraform_version: 1.7.0
 
       - name: Run terraform-action
-        uses: tkasuz/terraform-action@v1
+        uses: tkasuz/terraform-action@v1.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           config-path: .terraform-action.yaml

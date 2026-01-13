@@ -36,3 +36,9 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           config-path: examples/.terraform-action.yaml
+
+      - name: Run terraform-action
+        uses: tkasuz/terraform-action@v1.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          config-path: examples/.terraform-action.yaml
