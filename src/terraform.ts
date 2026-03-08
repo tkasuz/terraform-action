@@ -33,13 +33,20 @@ export async function executeTerraform(
   workingDir: string,
   projectName: string,
   additionalArgs: string[] = [],
-  planFilePath?: string
+  planFilePath?: string,
+  tfcmtConfigPath?: string
 ): Promise<TerraformResult> {
   const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
   core.info(`Executing terraform ${command}${argsStr} in ${workingDir}`);
 
   // Build tfcmt arguments: tfcmt [flags] -var "target:<project>" plan|apply -- terraform [command] [args]
   const tfcmtArgs: string[] = [];
+
+  // Pass custom config file if provided (-config must come first)
+  if (tfcmtConfigPath) {
+    tfcmtArgs.push('-config');
+    tfcmtArgs.push(tfcmtConfigPath);
+  }
 
   // Add target variable for monorepo support
   // This will prefix PR labels and comment titles with the project name
@@ -141,7 +148,8 @@ export async function executeTerraformWithTfcmt(
   projectName: string,
   workingDir: string,
   additionalArgs: string[] = [],
-  planFilePath?: string
+  planFilePath?: string,
+  tfcmtConfigPath?: string
 ): Promise<TerraformResult> {
   const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
   core.startGroup(`Executing terraform ${command}${argsStr} for project: ${projectName}`);
@@ -153,7 +161,8 @@ export async function executeTerraformWithTfcmt(
       workingDir,
       projectName,
       additionalArgs,
-      planFilePath
+      planFilePath,
+      tfcmtConfigPath
     );
   } finally {
     core.endGroup();

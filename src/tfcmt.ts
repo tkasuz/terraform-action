@@ -9,6 +9,64 @@ import * as core from '@actions/core';
 import * as tc from '@actions/tool-cache';
 
 /**
+ * The custom tfcmt plan template.
+ *
+ * Renders the plan output and appends a "Run this plan again" hint using the
+ * project name from the `target` tfcmt variable (passed via `-var "target:<name>"`).
+ */
+const PLAN_TEMPLATE = `
+{{- $target := index .Vars "target" -}}
+{{- if eq .ExitCode 1 -}}
+## ❌ Terraform Plan Failed{{ if $target }} (\`{{ $target }}\`){{ end }}
+{{- else if eq .ExitCode 0 -}}
+## ✅ Plan: No Changes{{ if $target }} (\`{{ $target }}\`){{ end }}
+{{- else -}}
+## 📋 Terraform Plan{{ if $target }} (\`{{ $target }}\`){{ end }}
+{{- end }}
+
+{{ if .Result -}}
+<details><summary>Show Plan</summary>
+
+{{ .Result }}
+
+</details>
+{{- end }}
+{{ if .ChangeOutsideTerraform -}}
+<details><summary>⚠️ Changes Outside Terraform</summary>
+
+{{ .ChangeOutsideTerraform }}
+
+</details>
+{{- end }}
+{{ if .Warning }}
+> ⚠️ {{ .Warning }}
+{{ end }}
+---
+**Run this plan again:**
+\`\`\`
+terraform plan{{ if $target }} -project={{ $target }}{{ end }}
+\`\`\`
+{{ if .Link }}[CI Details]({{ .Link }}){{ end }}
+`.trimStart();
+
+/**
+ * Writes a tfcmt configuration file with a custom plan template to a temp
+ * directory and returns the path to it.
+ */
+export function writeTfcmtConfig(): string {
+  const configContent = `terraform:
+  plan:
+    template: |
+${PLAN_TEMPLATE.split('\n').map((line) => `      ${line}`).join('\n')}
+`;
+
+  const configPath = path.join(os.tmpdir(), '.tfcmt-action.yml');
+  fs.writeFileSync(configPath, configContent, 'utf8');
+  core.info(`tfcmt config written to ${configPath}`);
+  return configPath;
+}
+
+/**
  * Maps Node.js platform to tfcmt platform naming
  */
 function getTfcmtPlatform(): string {

@@ -17,7 +17,7 @@ import {
   validateRequirements,
 } from './pr-validation';
 import { executeTerraformWithTfcmt, validateTerraformInstalled } from './terraform';
-import { setupTfcmt } from './tfcmt';
+import { setupTfcmt, writeTfcmtConfig } from './tfcmt';
 import type { ProjectConfig, PullRequestInfo, TerraformCommand } from './types';
 
 /**
@@ -92,6 +92,7 @@ async function run(): Promise<void> {
 
     // Setup tfcmt
     const tfcmtPath = await setupTfcmt();
+    const tfcmtConfigPath = writeTfcmtConfig();
 
     // Execute terraform for each target project serially
     for (const projectName of targetProjectNames) {
@@ -104,7 +105,8 @@ async function run(): Promise<void> {
         command,
         args,
         pr,
-        tfcmtPath
+        tfcmtPath,
+        tfcmtConfigPath
       );
     }
 
@@ -131,7 +133,8 @@ async function executeProjectCommand(
   command: 'plan' | 'apply',
   args: string[],
   pr: PullRequestInfo | null,
-  tfcmtPath: string
+  tfcmtPath: string,
+  tfcmtConfigPath: string
 ): Promise<void> {
   core.info(`\n${'='.repeat(60)}`);
   core.info(`Project: ${project.name}`);
@@ -175,7 +178,8 @@ async function executeProjectCommand(
     project.name,
     workingDir,
     args,
-    planFilePath
+    planFilePath,
+    tfcmtConfigPath
   );
 
   // Log results and upload plan file if this was a plan command
