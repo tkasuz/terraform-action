@@ -34,7 +34,8 @@ export async function executeTerraform(
   projectName: string,
   additionalArgs: string[] = [],
   planFilePath?: string,
-  tfcmtConfigPath?: string
+  tfcmtConfigPath?: string,
+  prNumber?: number
 ): Promise<TerraformResult> {
   const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
   core.info(`Executing terraform ${command}${argsStr} in ${workingDir}`);
@@ -46,6 +47,13 @@ export async function executeTerraform(
   if (tfcmtConfigPath) {
     tfcmtArgs.push('-config');
     tfcmtArgs.push(tfcmtConfigPath);
+  }
+
+  // Explicitly pass PR number so tfcmt can post comments for issue_comment and
+  // pull_request closed events where GITHUB_REF is not a PR ref
+  if (prNumber !== undefined) {
+    tfcmtArgs.push('-pr');
+    tfcmtArgs.push(String(prNumber));
   }
 
   // Add target variable for monorepo support
@@ -149,7 +157,8 @@ export async function executeTerraformWithTfcmt(
   workingDir: string,
   additionalArgs: string[] = [],
   planFilePath?: string,
-  tfcmtConfigPath?: string
+  tfcmtConfigPath?: string,
+  prNumber?: number
 ): Promise<TerraformResult> {
   const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
   core.startGroup(`Executing terraform ${command}${argsStr} for project: ${projectName}`);
@@ -162,7 +171,8 @@ export async function executeTerraformWithTfcmt(
       projectName,
       additionalArgs,
       planFilePath,
-      tfcmtConfigPath
+      tfcmtConfigPath,
+      prNumber
     );
   } finally {
     core.endGroup();

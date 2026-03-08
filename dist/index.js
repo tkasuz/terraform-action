@@ -83283,10 +83283,13 @@ async function run() {
             command = parsedComment.command;
             args = parsedComment.args;
         }
-        // Get PR information
+        // Always resolve PR number — needed so tfcmt can post comments regardless
+        // of whether GITHUB_REF points to a PR ref (it doesn't for issue_comment
+        // or pull_request closed events)
+        const prNumber = (0, pr_validation_1.getPRNumberFromContext)(github.context);
+        // Get full PR information (only needed for apply requirements validation)
         let pr = null;
         if (command === 'apply') {
-            const prNumber = (0, pr_validation_1.getPRNumberFromContext)(github.context);
             pr = await (0, pr_validation_1.getPullRequestInfo)(token, github.context.repo.owner, github.context.repo.repo, prNumber);
         }
         // Setup tfcmt
@@ -83298,7 +83301,7 @@ async function run() {
             if (!project) {
                 throw new Error(`Project not found: ${projectName}`);
             }
-            await executeProjectCommand(project, command, args, pr, tfcmtPath, tfcmtConfigPath);
+            await executeProjectCommand(project, command, args, pr, tfcmtPath, tfcmtConfigPath, prNumber);
         }
         core.info('Terraform PR Comment Action completed successfully');
     }
@@ -83318,7 +83321,7 @@ async function run() {
  * @param tfcmtPath - Path to tfcmt binary
  * @param tfcmtConfig - Optional tfcmt configuration
  */
-async function executeProjectCommand(project, command, args, pr, tfcmtPath, tfcmtConfigPath) {
+async function executeProjectCommand(project, command, args, pr, tfcmtPath, tfcmtConfigPath, prNumber) {
     core.info(`\n${'='.repeat(60)}`);
     core.info(`Project: ${project.name}`);
     core.info(`Directory: ${project.dir}`);
@@ -83347,7 +83350,7 @@ async function executeProjectCommand(project, command, args, pr, tfcmtPath, tfcm
         }
     }
     // Execute terraform with tfcmt
-    const result = await (0, terraform_1.executeTerraformWithTfcmt)(tfcmtPath, command, project.name, workingDir, args, planFilePath, tfcmtConfigPath);
+    const result = await (0, terraform_1.executeTerraformWithTfcmt)(tfcmtPath, command, project.name, workingDir, args, planFilePath, tfcmtConfigPath, prNumber);
     // Log results and upload plan file if this was a plan command
     if (command === 'plan') {
         if (result.hasChanges) {
@@ -83628,7 +83631,7 @@ const exec = __importStar(__nccwpck_require__(24154));
  * - For plan commands, saves plan file to <workingDir>/tfplan-<projectName>
  * - For apply commands, uses provided planFilePath if available
  */
-async function executeTerraform(tfcmtPath, command, workingDir, projectName, additionalArgs = [], planFilePath, tfcmtConfigPath) {
+async function executeTerraform(tfcmtPath, command, workingDir, projectName, additionalArgs = [], planFilePath, tfcmtConfigPath, prNumber) {
     const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
     core.info(`Executing terraform ${command}${argsStr} in ${workingDir}`);
     // Build tfcmt arguments: tfcmt [flags] -var "target:<project>" plan|apply -- terraform [command] [args]
@@ -83637,6 +83640,12 @@ async function executeTerraform(tfcmtPath, command, workingDir, projectName, add
     if (tfcmtConfigPath) {
         tfcmtArgs.push('-config');
         tfcmtArgs.push(tfcmtConfigPath);
+    }
+    // Explicitly pass PR number so tfcmt can post comments for issue_comment and
+    // pull_request closed events where GITHUB_REF is not a PR ref
+    if (prNumber !== undefined) {
+        tfcmtArgs.push('-pr');
+        tfcmtArgs.push(String(prNumber));
     }
     // Add target variable for monorepo support
     // This will prefix PR labels and comment titles with the project name
@@ -83720,11 +83729,11 @@ async function executeTerraform(tfcmtPath, command, workingDir, projectName, add
  * @remarks
  * Executes terraform wrapped with tfcmt for automatic PR comment posting
  */
-async function executeTerraformWithTfcmt(tfcmtPath, command, projectName, workingDir, additionalArgs = [], planFilePath, tfcmtConfigPath) {
+async function executeTerraformWithTfcmt(tfcmtPath, command, projectName, workingDir, additionalArgs = [], planFilePath, tfcmtConfigPath, prNumber) {
     const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
     core.startGroup(`Executing terraform ${command}${argsStr} for project: ${projectName}`);
     try {
-        return await executeTerraform(tfcmtPath, command, workingDir, projectName, additionalArgs, planFilePath, tfcmtConfigPath);
+        return await executeTerraform(tfcmtPath, command, workingDir, projectName, additionalArgs, planFilePath, tfcmtConfigPath, prNumber);
     }
     finally {
         core.endGroup();
@@ -83885,7 +83894,14 @@ terraform:
       {{template "error_messages" .}}
       {{if .Vars.target}}
       ---
-      **Run this plan again:** \`terraform plan -project={{.Vars.target}}\`
+      **Run this plan again:**
+      \`\`\`
+      terraform plan -project={{.Vars.target}}
+      \`\`\`
+      **Apply this plan:**
+      \`\`\`
+      terraform apply -project={{.Vars.target}}
+      \`\`\`
       {{end}}
     when_add_or_update_only:
       label: "{{if .Vars.target}}{{.Vars.target}}/{{end}}add-or-update"

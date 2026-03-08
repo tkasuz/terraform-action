@@ -95,7 +95,14 @@ terraform:
       {{template "error_messages" .}}
       {{if .Vars.target}}
       ---
-      **Run this plan again:** \`terraform plan -project={{.Vars.target}}\`
+      **Run this plan again:**
+      \`\`\`
+      terraform plan -project={{.Vars.target}}
+      \`\`\`
+      **Apply this plan:**
+      \`\`\`
+      terraform apply -project={{.Vars.target}}
+      \`\`\`
       {{end}}
     when_add_or_update_only:
       label: "{{if .Vars.target}}{{.Vars.target}}/{{end}}add-or-update"

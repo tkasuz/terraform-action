@@ -78,10 +78,14 @@ async function run(): Promise<void> {
       args = parsedComment.args;
     }
 
-    // Get PR information
+    // Always resolve PR number — needed so tfcmt can post comments regardless
+    // of whether GITHUB_REF points to a PR ref (it doesn't for issue_comment
+    // or pull_request closed events)
+    const prNumber = getPRNumberFromContext(github.context);
+
+    // Get full PR information (only needed for apply requirements validation)
     let pr: PullRequestInfo | null = null;
     if (command === 'apply') {
-      const prNumber = getPRNumberFromContext(github.context);
       pr = await getPullRequestInfo(
         token,
         github.context.repo.owner,
@@ -106,7 +110,8 @@ async function run(): Promise<void> {
         args,
         pr,
         tfcmtPath,
-        tfcmtConfigPath
+        tfcmtConfigPath,
+        prNumber
       );
     }
 
@@ -134,7 +139,8 @@ async function executeProjectCommand(
   args: string[],
   pr: PullRequestInfo | null,
   tfcmtPath: string,
-  tfcmtConfigPath: string
+  tfcmtConfigPath: string,
+  prNumber: number
 ): Promise<void> {
   core.info(`\n${'='.repeat(60)}`);
   core.info(`Project: ${project.name}`);
@@ -179,7 +185,8 @@ async function executeProjectCommand(
     workingDir,
     args,
     planFilePath,
-    tfcmtConfigPath
+    tfcmtConfigPath,
+    prNumber
   );
 
   // Log results and upload plan file if this was a plan command
