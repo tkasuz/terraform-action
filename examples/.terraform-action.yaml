@@ -1,3 +1,4 @@
+automerge: true
 projects:
   - name: production
     dir: examples/terraform/prod

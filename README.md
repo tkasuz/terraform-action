@@ -37,7 +37,7 @@ on:
   issue_comment:
     types: [created]
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, closed]
 
 permissions:
   contents: read
@@ -76,6 +76,7 @@ jobs:
 Create `.terraform-action.yaml`:
 
 ```yaml
+automerge: true
 projects:
   - name: production
     dir: terraform/production

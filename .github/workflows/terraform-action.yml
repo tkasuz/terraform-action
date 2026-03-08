@@ -4,7 +4,7 @@ on:
   issue_comment:
     types: [created]
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, closed]
 
 permissions:
   contents: read
@@ -33,12 +33,6 @@ jobs:
 
       - name: Run terraform-action on local
         uses: ./
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          config-path: examples/.terraform-action.yaml
-
-      - name: Run terraform-action
-        uses: tkasuz/terraform-action@v1.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           config-path: examples/.terraform-action.yaml
