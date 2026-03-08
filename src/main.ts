@@ -12,6 +12,7 @@ import {
   getCommentBodyFromContext,
   getPRNumberFromContext,
   getPullRequestInfo,
+  isPRMerged,
   validateEventType,
   validateRequirements,
 } from './pr-validation';
@@ -45,8 +46,16 @@ async function run(): Promise<void> {
     let command: TerraformCommand = 'plan';
     let args: string[] = [];
 
-    // Extract comment body
-    if (github.context.eventName === 'issue_comment') {
+    // Handle automerge: when a PR is merged and automerge is enabled, apply all projects
+    if (isPRMerged(github.context)) {
+      if (!config.automerge) {
+        core.info('PR merged but automerge is not enabled in config, skipping');
+        return;
+      }
+      core.info('PR merged with automerge enabled — running apply for all projects');
+      command = 'apply';
+    } else if (github.context.eventName === 'issue_comment') {
+      // Extract comment body
       const commentBody = getCommentBodyFromContext(github.context);
       core.info(`Processing comment: ${commentBody}`);
 

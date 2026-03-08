@@ -124,6 +124,19 @@ export function validateEventType(eventName: string): void {
 }
 
 /**
+ * Returns true when the current context is a merged pull_request event.
+ *
+ * @param context - GitHub context
+ */
+export function isPRMerged(context: typeof github.context): boolean {
+  return (
+    context.eventName === 'pull_request' &&
+    context.payload.action === 'closed' &&
+    context.payload.pull_request?.merged === true
+  );
+}
+
+/**
  * Extracts PR number from the GitHub context
  *
  * @param context - GitHub context
@@ -131,12 +144,15 @@ export function validateEventType(eventName: string): void {
  * @throws Error if PR number cannot be determined
  */
 export function getPRNumberFromContext(context: typeof github.context): number {
-  const prNumber = context.payload.issue?.number;
+  // issue_comment events expose the PR number via payload.issue.number
+  // pull_request events expose it via payload.pull_request.number
+  const prNumber =
+    context.payload.issue?.number ?? context.payload.pull_request?.number;
 
   if (!prNumber) {
     throw new Error(
       'Could not determine PR number from context. ' +
-        'Ensure this action is triggered by an issue_comment event on a pull request.'
+        'Ensure this action is triggered by an issue_comment or pull_request event on a pull request.'
     );
   }
 

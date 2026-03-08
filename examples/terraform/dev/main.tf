@@ -10,6 +10,10 @@ resource "random_pet" "example" {
   length    = 10
   separator = "-"
 }
+resource "random_pet" "example2" {
+  length    = 10
+  separator = "-"
+}
 
 # Example output
 output "pet_name" {

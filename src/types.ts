@@ -44,6 +44,8 @@ export interface ProjectConfig {
 export interface Config {
   /** List of Terraform projects */
   projects: ProjectConfig[];
+  /** Whether to automatically apply all plans when a PR is merged */
+  automerge?: boolean;
 }
 
 /**

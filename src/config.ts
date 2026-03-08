@@ -130,6 +130,13 @@ function validateConfig(config: unknown): Config {
 
   const validated: Config = { projects };
 
+  if (c.automerge !== undefined) {
+    if (typeof c.automerge !== 'boolean') {
+      throw new Error('Configuration "automerge" must be a boolean');
+    }
+    validated.automerge = c.automerge;
+  }
+
   return validated;
 }
 
