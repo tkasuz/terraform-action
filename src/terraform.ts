@@ -2,6 +2,8 @@
  * Terraform execution logic
  */
 
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as core from '@actions/core';
 import * as exec from '@actions/exec';
@@ -94,8 +96,26 @@ export async function executeTerraform(
   let stdout = '';
   let stderr = '';
 
+  // Build env — when triggered by issue_comment the inherited GITHUB_EVENT_NAME
+  // is "issue_comment" and the event payload has no pull_request key, so tfcmt
+  // skips posting a PR comment.  Override with a synthetic pull_request event so
+  // tfcmt always posts the comment regardless of the triggering event type.
+  const env: Record<string, string> = Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
+  );
+  if (prNumber !== undefined) {
+    const syntheticEvent = JSON.stringify({ number: prNumber, pull_request: { number: prNumber } });
+    const eventPath = path.join(os.tmpdir(), `tfcmt-event-${prNumber}.json`);
+    fs.writeFileSync(eventPath, syntheticEvent);
+    env['GITHUB_EVENT_NAME'] = 'pull_request';
+    env['GITHUB_EVENT_PATH'] = eventPath;
+    env['GITHUB_REF'] = `refs/pull/${prNumber}/merge`;
+    core.info(`Overriding GITHUB_EVENT_NAME=pull_request, GITHUB_EVENT_PATH=${eventPath}`);
+  }
+
   const options: exec.ExecOptions = {
     cwd: workingDir,
+    env,
     ignoreReturnCode: true,
     listeners: {
       stdout: (data: Buffer) => {
