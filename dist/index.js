@@ -83130,6 +83130,12 @@ function validateConfig(config) {
         names.add(project.name);
     }
     const validated = { projects };
+    if (c.automerge !== undefined) {
+        if (typeof c.automerge !== 'boolean') {
+            throw new Error('Configuration "automerge" must be a boolean');
+        }
+        validated.automerge = c.automerge;
+    }
     return validated;
 }
 /**
@@ -83249,8 +83255,17 @@ async function run() {
         let targetProjectNames = config.projects.map((p) => p.name);
         let command = 'plan';
         let args = [];
-        // Extract comment body
-        if (github.context.eventName === 'issue_comment') {
+        // Handle automerge: when a PR is merged and automerge is enabled, apply all projects
+        if ((0, pr_validation_1.isPRMerged)(github.context)) {
+            if (!config.automerge) {
+                core.info('PR merged but automerge is not enabled in config, skipping');
+                return;
+            }
+            core.info('PR merged with automerge enabled — running apply for all projects');
+            command = 'apply';
+        }
+        else if (github.context.eventName === 'issue_comment') {
+            // Extract comment body
             const commentBody = (0, pr_validation_1.getCommentBodyFromContext)(github.context);
             core.info(`Processing comment: ${commentBody}`);
             // Parse comment
@@ -83268,21 +83283,25 @@ async function run() {
             command = parsedComment.command;
             args = parsedComment.args;
         }
-        // Get PR information
+        // Always resolve PR number — needed so tfcmt can post comments regardless
+        // of whether GITHUB_REF points to a PR ref (it doesn't for issue_comment
+        // or pull_request closed events)
+        const prNumber = (0, pr_validation_1.getPRNumberFromContext)(github.context);
+        // Get full PR information (only needed for apply requirements validation)
         let pr = null;
         if (command === 'apply') {
-            const prNumber = (0, pr_validation_1.getPRNumberFromContext)(github.context);
             pr = await (0, pr_validation_1.getPullRequestInfo)(token, github.context.repo.owner, github.context.repo.repo, prNumber);
         }
         // Setup tfcmt
         const tfcmtPath = await (0, tfcmt_1.setupTfcmt)();
+        const tfcmtConfigPath = (0, tfcmt_1.writeTfcmtConfig)();
         // Execute terraform for each target project serially
         for (const projectName of targetProjectNames) {
             const project = config.projects.find((p) => p.name === projectName);
             if (!project) {
                 throw new Error(`Project not found: ${projectName}`);
             }
-            await executeProjectCommand(project, command, args, pr, tfcmtPath);
+            await executeProjectCommand(project, command, args, pr, tfcmtPath, tfcmtConfigPath, prNumber);
         }
         core.info('Terraform PR Comment Action completed successfully');
     }
@@ -83302,7 +83321,7 @@ async function run() {
  * @param tfcmtPath - Path to tfcmt binary
  * @param tfcmtConfig - Optional tfcmt configuration
  */
-async function executeProjectCommand(project, command, args, pr, tfcmtPath) {
+async function executeProjectCommand(project, command, args, pr, tfcmtPath, tfcmtConfigPath, prNumber) {
     core.info(`\n${'='.repeat(60)}`);
     core.info(`Project: ${project.name}`);
     core.info(`Directory: ${project.dir}`);
@@ -83331,7 +83350,7 @@ async function executeProjectCommand(project, command, args, pr, tfcmtPath) {
         }
     }
     // Execute terraform with tfcmt
-    const result = await (0, terraform_1.executeTerraformWithTfcmt)(tfcmtPath, command, project.name, workingDir, args, planFilePath);
+    const result = await (0, terraform_1.executeTerraformWithTfcmt)(tfcmtPath, command, project.name, workingDir, args, planFilePath, tfcmtConfigPath, prNumber);
     // Log results and upload plan file if this was a plan command
     if (command === 'plan') {
         if (result.hasChanges) {
@@ -83406,6 +83425,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getPullRequestInfo = getPullRequestInfo;
 exports.validateRequirements = validateRequirements;
 exports.validateEventType = validateEventType;
+exports.isPRMerged = isPRMerged;
 exports.getPRNumberFromContext = getPRNumberFromContext;
 exports.getCommentBodyFromContext = getCommentBodyFromContext;
 const core = __importStar(__nccwpck_require__(59550));
@@ -83499,6 +83519,16 @@ function validateEventType(eventName) {
     }
 }
 /**
+ * Returns true when the current context is a merged pull_request event.
+ *
+ * @param context - GitHub context
+ */
+function isPRMerged(context) {
+    return (context.eventName === 'pull_request' &&
+        context.payload.action === 'closed' &&
+        context.payload.pull_request?.merged === true);
+}
+/**
  * Extracts PR number from the GitHub context
  *
  * @param context - GitHub context
@@ -83506,10 +83536,12 @@ function validateEventType(eventName) {
  * @throws Error if PR number cannot be determined
  */
 function getPRNumberFromContext(context) {
-    const prNumber = context.payload.issue?.number;
+    // issue_comment events expose the PR number via payload.issue.number
+    // pull_request events expose it via payload.pull_request.number
+    const prNumber = context.payload.issue?.number ?? context.payload.pull_request?.number;
     if (!prNumber) {
         throw new Error('Could not determine PR number from context. ' +
-            'Ensure this action is triggered by an issue_comment event on a pull request.');
+            'Ensure this action is triggered by an issue_comment or pull_request event on a pull request.');
     }
     return prNumber;
 }
@@ -83576,6 +83608,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.executeTerraform = executeTerraform;
 exports.executeTerraformWithTfcmt = executeTerraformWithTfcmt;
 exports.validateTerraformInstalled = validateTerraformInstalled;
+const fs = __importStar(__nccwpck_require__(73024));
+const os = __importStar(__nccwpck_require__(48161));
 const path = __importStar(__nccwpck_require__(76760));
 const core = __importStar(__nccwpck_require__(59550));
 const exec = __importStar(__nccwpck_require__(24154));
@@ -83599,11 +83633,22 @@ const exec = __importStar(__nccwpck_require__(24154));
  * - For plan commands, saves plan file to <workingDir>/tfplan-<projectName>
  * - For apply commands, uses provided planFilePath if available
  */
-async function executeTerraform(tfcmtPath, command, workingDir, projectName, additionalArgs = [], planFilePath) {
+async function executeTerraform(tfcmtPath, command, workingDir, projectName, additionalArgs = [], planFilePath, tfcmtConfigPath, prNumber) {
     const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
     core.info(`Executing terraform ${command}${argsStr} in ${workingDir}`);
     // Build tfcmt arguments: tfcmt [flags] -var "target:<project>" plan|apply -- terraform [command] [args]
     const tfcmtArgs = [];
+    // Pass custom config file if provided (-config must come first)
+    if (tfcmtConfigPath) {
+        tfcmtArgs.push('-config');
+        tfcmtArgs.push(tfcmtConfigPath);
+    }
+    // Explicitly pass PR number so tfcmt can post comments for issue_comment and
+    // pull_request closed events where GITHUB_REF is not a PR ref
+    if (prNumber !== undefined) {
+        tfcmtArgs.push('-pr');
+        tfcmtArgs.push(String(prNumber));
+    }
     // Add target variable for monorepo support
     // This will prefix PR labels and comment titles with the project name
     tfcmtArgs.push('-var');
@@ -83637,8 +83682,23 @@ async function executeTerraform(tfcmtPath, command, workingDir, projectName, add
     // Capture stdout and stderr
     let stdout = '';
     let stderr = '';
+    // Build env — when triggered by issue_comment the inherited GITHUB_EVENT_NAME
+    // is "issue_comment" and the event payload has no pull_request key, so tfcmt
+    // skips posting a PR comment.  Override with a synthetic pull_request event so
+    // tfcmt always posts the comment regardless of the triggering event type.
+    const env = Object.fromEntries(Object.entries(process.env).filter((entry) => entry[1] !== undefined));
+    if (prNumber !== undefined) {
+        const syntheticEvent = JSON.stringify({ number: prNumber, pull_request: { number: prNumber } });
+        const eventPath = path.join(os.tmpdir(), `tfcmt-event-${prNumber}.json`);
+        fs.writeFileSync(eventPath, syntheticEvent);
+        env['GITHUB_EVENT_NAME'] = 'pull_request';
+        env['GITHUB_EVENT_PATH'] = eventPath;
+        env['GITHUB_REF'] = `refs/pull/${prNumber}/merge`;
+        core.info(`Overriding GITHUB_EVENT_NAME=pull_request, GITHUB_EVENT_PATH=${eventPath}`);
+    }
     const options = {
         cwd: workingDir,
+        env,
         ignoreReturnCode: true,
         listeners: {
             stdout: (data) => {
@@ -83686,11 +83746,11 @@ async function executeTerraform(tfcmtPath, command, workingDir, projectName, add
  * @remarks
  * Executes terraform wrapped with tfcmt for automatic PR comment posting
  */
-async function executeTerraformWithTfcmt(tfcmtPath, command, projectName, workingDir, additionalArgs = [], planFilePath) {
+async function executeTerraformWithTfcmt(tfcmtPath, command, projectName, workingDir, additionalArgs = [], planFilePath, tfcmtConfigPath, prNumber) {
     const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
     core.startGroup(`Executing terraform ${command}${argsStr} for project: ${projectName}`);
     try {
-        return await executeTerraform(tfcmtPath, command, workingDir, projectName, additionalArgs, planFilePath);
+        return await executeTerraform(tfcmtPath, command, workingDir, projectName, additionalArgs, planFilePath, tfcmtConfigPath, prNumber);
     }
     finally {
         core.endGroup();
@@ -83757,12 +83817,158 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.writeTfcmtConfig = writeTfcmtConfig;
 exports.setupTfcmt = setupTfcmt;
 const fs = __importStar(__nccwpck_require__(73024));
 const os = __importStar(__nccwpck_require__(48161));
 const path = __importStar(__nccwpck_require__(76760));
 const core = __importStar(__nccwpck_require__(59550));
 const tc = __importStar(__nccwpck_require__(42493));
+/**
+ * Full tfcmt configuration based on the upstream default, with the plan
+ * template extended to show a "Run this plan again" command using -project=.
+ *
+ * @see https://suzuki-shunsuke.github.io/tfcmt/config/#default-configuration
+ */
+const TFCMT_CONFIG = `
+embedded_var_names: []
+
+templates:
+  plan_title: "## {{if eq .ExitCode 1}}:x: {{end}}Plan Result{{if .Vars.target}} ({{.Vars.target}}){{end}}"
+  apply_title: "## :{{if eq .ExitCode 0}}white_check_mark{{else}}x{{end}}: Apply Result{{if .Vars.target}} ({{.Vars.target}}){{end}}"
+  result: "{{if .Result}}<pre><code>{{ .Result }}</code></pre>{{end}}"
+  updated_resources: |
+    {{if .CreatedResources}}
+    * Create
+    {{- range .CreatedResources}}
+      * {{.}}
+    {{- end}}{{end}}{{if .UpdatedResources}}
+    * Update
+    {{- range .UpdatedResources}}
+      * {{.}}
+    {{- end}}{{end}}{{if .DeletedResources}}
+    * Delete
+    {{- range .DeletedResources}}
+      * {{.}}
+    {{- end}}{{end}}{{if .ReplacedResources}}
+    * Replace
+    {{- range .ReplacedResources}}
+      * {{.}}
+    {{- end}}{{end}}{{if .ImportedResources}}
+    * Import
+    {{- range .ImportedResources}}
+      * {{.}}
+    {{- end}}{{end}}{{if .MovedResources}}
+    * Move
+    {{- range .MovedResources}}
+      * {{.Before}} => {{.After}}
+    {{- end}}{{end}}
+  deletion_warning: |
+    {{if .HasDestroy}}
+    ### :warning: Resource Deletion will happen :warning:
+    This plan contains resource delete operation. Please check the plan result very carefully!
+    {{end}}
+  changed_result: |
+    {{if .ChangedResult}}
+    <details><summary>Change Result (Click me)</summary>
+    {{wrapCode .ChangedResult}}
+    </details>
+    {{end}}
+  change_outside_terraform: |
+    {{if .ChangeOutsideTerraform}}
+    <details><summary>:information_source: Objects have changed outside of Terraform</summary>
+    _This feature was introduced from [Terraform v0.15.4](https://github.com/hashicorp/terraform/releases/tag/v0.15.4)._
+    {{wrapCode .ChangeOutsideTerraform}}
+    </details>
+    {{end}}
+  warning: |
+    {{if .Warning}}
+    ## :warning: Warnings :warning:
+    {{wrapCode .Warning}}
+    {{end}}
+  error_messages: |
+    {{if .ErrorMessages}}
+    ## :warning: Errors
+    {{range .ErrorMessages}}
+    * {{. -}}
+    {{- end}}{{end}}
+  guide_apply_failure: ""
+  guide_apply_parse_error: ""
+
+terraform:
+  plan:
+    disable_label: false
+    ignore_warning: false
+    template: |
+      {{template "plan_title" .}}
+      {{if .Link}}[CI link]({{.Link}}){{end}}
+      {{template "deletion_warning" .}}
+      {{template "result" .}}
+      {{template "updated_resources" .}}
+      {{template "changed_result" .}}
+      {{template "change_outside_terraform" .}}
+      {{template "warning" .}}
+      {{template "error_messages" .}}
+      {{if .Vars.target}}
+      ---
+      **Run this plan again:**
+      \`\`\`
+      terraform plan -project={{.Vars.target}}
+      \`\`\`
+      **Apply this plan:**
+      \`\`\`
+      terraform apply -project={{.Vars.target}}
+      \`\`\`
+      {{end}}
+    when_add_or_update_only:
+      label: "{{if .Vars.target}}{{.Vars.target}}/{{end}}add-or-update"
+      label_color: 1d76db
+    when_destroy:
+      label: "{{if .Vars.target}}{{.Vars.target}}/{{end}}destroy"
+      label_color: d93f0b
+    when_no_changes:
+      label: "{{if .Vars.target}}{{.Vars.target}}/{{end}}no-changes"
+      label_color: 0e8a16
+    when_plan_error:
+      label:
+      label_color:
+    when_parse_error:
+      template: |
+        {{template "plan_title" .}}
+        {{if .Link}}[CI link]({{.Link}}){{end}}
+        It failed to parse the result.
+        <details><summary>Details (Click me)</summary>
+        {{wrapCode .CombinedOutput}}
+        </details>
+  apply:
+    template: |
+      {{template "apply_title" .}}
+      {{if .Link}}[CI link]({{.Link}}){{end}}
+      {{if ne .ExitCode 0}}{{template "guide_apply_failure" .}}{{end}}
+      {{template "result" .}}
+      <details><summary>Details (Click me)</summary>
+      {{wrapCode .CombinedOutput}}
+      </details>
+      {{template "error_messages" .}}
+    when_parse_error:
+      template: |
+        {{template "apply_title" .}}
+        {{if .Link}}[CI link]({{.Link}}){{end}}
+        {{template "guide_apply_parse_error" .}}
+        It failed to parse the result.
+        <details><summary>Details (Click me)</summary>
+        {{wrapCode .CombinedOutput}}
+        </details>
+`.trimStart();
+/**
+ * Writes a tfcmt configuration file to a temp directory and returns the path.
+ */
+function writeTfcmtConfig() {
+    const configPath = path.join(os.tmpdir(), '.tfcmt-action.yml');
+    fs.writeFileSync(configPath, TFCMT_CONFIG, 'utf8');
+    core.info(`tfcmt config written to ${configPath}`);
+    return configPath;
+}
 /**
  * Maps Node.js platform to tfcmt platform naming
  */

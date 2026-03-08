@@ -2,6 +2,8 @@
  * Terraform execution logic
  */
 
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as core from '@actions/core';
 import * as exec from '@actions/exec';
@@ -33,13 +35,28 @@ export async function executeTerraform(
   workingDir: string,
   projectName: string,
   additionalArgs: string[] = [],
-  planFilePath?: string
+  planFilePath?: string,
+  tfcmtConfigPath?: string,
+  prNumber?: number
 ): Promise<TerraformResult> {
   const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
   core.info(`Executing terraform ${command}${argsStr} in ${workingDir}`);
 
   // Build tfcmt arguments: tfcmt [flags] -var "target:<project>" plan|apply -- terraform [command] [args]
   const tfcmtArgs: string[] = [];
+
+  // Pass custom config file if provided (-config must come first)
+  if (tfcmtConfigPath) {
+    tfcmtArgs.push('-config');
+    tfcmtArgs.push(tfcmtConfigPath);
+  }
+
+  // Explicitly pass PR number so tfcmt can post comments for issue_comment and
+  // pull_request closed events where GITHUB_REF is not a PR ref
+  if (prNumber !== undefined) {
+    tfcmtArgs.push('-pr');
+    tfcmtArgs.push(String(prNumber));
+  }
 
   // Add target variable for monorepo support
   // This will prefix PR labels and comment titles with the project name
@@ -79,8 +96,26 @@ export async function executeTerraform(
   let stdout = '';
   let stderr = '';
 
+  // Build env — when triggered by issue_comment the inherited GITHUB_EVENT_NAME
+  // is "issue_comment" and the event payload has no pull_request key, so tfcmt
+  // skips posting a PR comment.  Override with a synthetic pull_request event so
+  // tfcmt always posts the comment regardless of the triggering event type.
+  const env: Record<string, string> = Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
+  );
+  if (prNumber !== undefined) {
+    const syntheticEvent = JSON.stringify({ number: prNumber, pull_request: { number: prNumber } });
+    const eventPath = path.join(os.tmpdir(), `tfcmt-event-${prNumber}.json`);
+    fs.writeFileSync(eventPath, syntheticEvent);
+    env['GITHUB_EVENT_NAME'] = 'pull_request';
+    env['GITHUB_EVENT_PATH'] = eventPath;
+    env['GITHUB_REF'] = `refs/pull/${prNumber}/merge`;
+    core.info(`Overriding GITHUB_EVENT_NAME=pull_request, GITHUB_EVENT_PATH=${eventPath}`);
+  }
+
   const options: exec.ExecOptions = {
     cwd: workingDir,
+    env,
     ignoreReturnCode: true,
     listeners: {
       stdout: (data: Buffer) => {
@@ -141,7 +176,9 @@ export async function executeTerraformWithTfcmt(
   projectName: string,
   workingDir: string,
   additionalArgs: string[] = [],
-  planFilePath?: string
+  planFilePath?: string,
+  tfcmtConfigPath?: string,
+  prNumber?: number
 ): Promise<TerraformResult> {
   const argsStr = additionalArgs.length > 0 ? ` ${additionalArgs.join(' ')}` : '';
   core.startGroup(`Executing terraform ${command}${argsStr} for project: ${projectName}`);
@@ -153,7 +190,9 @@ export async function executeTerraformWithTfcmt(
       workingDir,
       projectName,
       additionalArgs,
-      planFilePath
+      planFilePath,
+      tfcmtConfigPath,
+      prNumber
     );
   } finally {
     core.endGroup();
