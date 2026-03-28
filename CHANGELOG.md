@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/tkasuz/terraform-action/compare/v1.1.0...v1.2.0) (2026-03-08)
+
+
+### Features
+
+* Automerge ([#21](https://github.com/tkasuz/terraform-action/issues/21)) ([8742b51](https://github.com/tkasuz/terraform-action/commit/8742b51067157da73a32875b3b1b66c57c315521))
+
 ## [1.1.0](https://github.com/tkasuz/terraform-action/compare/v1.0.0...v1.1.0) (2026-01-12)
 
 
